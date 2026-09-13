@@ -41,26 +41,26 @@ for subject in SubjectAdultList + SubjectElderlyList:
     
     subject_files = [f for f in os.listdir(sisfall_dataset_path + subject)]
     # make new dir to store the loaded dataset
-    os.makedirs(sisfall_dataset_loaded_path + subject) 
+    os.makedirs(sisfall_dataset_loaded_path + subject, exist_ok=True) 
     
     for file in subject_files:
         
         if file.endswith(".txt"): # so that pd.read_csv skips non text files
             
-            df1 = pd.read_csv(sisfall_dataset_path + subject + "\\" + file, names=Columns)
-            df1 = df1.iloc[:, [0,1,2,3,4,5]]
+            sensor_df = pd.read_csv(sisfall_dataset_path + subject + "\\" + file, names=Columns)
+            sensor_df = sensor_df.iloc[:, [0,1,2,3,4,5]]
             # TODO: assumed that the ADXL345 accelerometer was used
-            df2 = pd.read_csv(sisfall_dataset_annotated_path + subject + "\\" + file, names=["Label"])
-            df3 = pd.concat([df1, df2], axis=1)
+            label_df = pd.read_csv(sisfall_dataset_annotated_path + subject + "\\" + file, names=["Label"])
+            trial_df = pd.concat([sensor_df, label_df], axis=1)
             
             # Conversion from bits into g and deg/sec units
-            df3[Columns_ADXL345] = df3[Columns_ADXL345] * ADXL345_factor
-            df3[Columns_ITG3200] = df3[Columns_ITG3200] * ITG3200_factor
+            trial_df[Columns_ADXL345] = trial_df[Columns_ADXL345] * ADXL345_factor
+            trial_df[Columns_ITG3200] = trial_df[Columns_ITG3200] * ITG3200_factor
             # replacing the ALERT into BKG as advised by https://doi.org/10.1109/TETC.2020.3027454
-            # df3["Label"] = df3["Label"].apply(lambda x: 0 if x == 1 else x)
-            df3["Label"] = df3["Label"].replace(1,0)
+            # trial_df["Label"] = trial_df["Label"].apply(lambda x: 0 if x == 1 else x)
+            trial_df["Label"] = trial_df["Label"].replace(1,0)
             
-            df3.to_csv(sisfall_dataset_loaded_path + subject + "\\" + file)
+            trial_df.to_csv(sisfall_dataset_loaded_path + subject + "\\" + file, index=False)
         
         
     
