@@ -1,9 +1,10 @@
+import os
+from pathlib import Path
+from dotenv import load_dotenv
 import numpy as np
 import tensorflow as tf
 from collections import Counter
 import matplotlib.pyplot as plt
-
-sisfall_dataset_processed_path = "PC\\datasets\\SisFall_dataset_processed\\"
 
 subject_adult_list = [f"SA{str(i).zfill(2)}" for i in range(1, 24)]
 subject_elderly_list = [f"SE{str(i).zfill(2)}" for i in range(1, 16)]
@@ -15,8 +16,11 @@ output_signature = (output_signature_window, output_signature_label)
 
 
 def yield_subject_windows(subject, with_labels):
+    load_dotenv()  
+    sisfall_dataset_processed_path = Path(os.environ.get("SISFALL_DATASET_PROCESSED_ROOT"))
     subject = subject.decode('utf-8')
-    with np.load(sisfall_dataset_processed_path + subject + ".npz") as subject_data:
+    
+    with np.load(sisfall_dataset_processed_path/f"{subject}.npz") as subject_data:
         windows = subject_data['windows']
         labels = subject_data['labels']
     for window, label in zip(windows, labels):
@@ -31,7 +35,7 @@ def make_subject_dataset(subject, output_signature, with_labels):
     return dataset
 
 def make_dataset(subject_set, output_signature, with_labels, batch_size=None,
-                  shuffle_buffer_size=1000, cache_path=None):
+                  shuffle_buffer_size=1000):
     
     output_signature = output_signature if with_labels else output_signature[0]
     
@@ -44,31 +48,30 @@ def make_dataset(subject_set, output_signature, with_labels, batch_size=None,
         deterministic=False
     )
 
-    dataset = dataset.cache(cache_path) if cache_path else dataset.cache()
+    dataset = dataset.cache()
 
     dataset = dataset.shuffle(shuffle_buffer_size, reshuffle_each_iteration=True)
 
-    if batch_size:
-        dataset = dataset.batch(batch_size)
+    dataset = dataset.batch(batch_size) if batch_size else dataset
 
     dataset = dataset.prefetch(tf.data.AUTOTUNE)
 
     return dataset
 
-def count_labels(subject_set):
+def count_labels(subject_set, sisfall_dataset_processed_path):
     count = Counter()
     for subject in subject_set:
-        with np.load(sisfall_dataset_processed_path + subject + ".npz") as subject_data:
+        with np.load(sisfall_dataset_processed_path/f"{subject}.npz") as subject_data:
             labels_oneshot_encoded = subject_data['labels'] # shape (n, 2)
             labels_unencoded = np.argmax(labels_oneshot_encoded, axis=1)
             count.update(labels_unencoded)
     return count
 
-def count_labels_per_subject(subject_set):
+def count_labels_per_subject(subject_set, sisfall_dataset_processed_path):
     adl_array = []
     fall_array = []
     for subject in subject_set:
-        with np.load(sisfall_dataset_processed_path + subject + ".npz") as subject_data:
+        with np.load(sisfall_dataset_processed_path/f"{subject}.npz") as subject_data:
             labels_oneshot_encoded = subject_data['labels']
             labels_unencoded = np.argmax(labels_oneshot_encoded, axis=1)
         count = Counter(labels_unencoded)
@@ -77,8 +80,8 @@ def count_labels_per_subject(subject_set):
         
     return {"ADL": np.array(adl_array), "FALL": np.array(fall_array)}
         
-def plot_subject_labels(subject_set):
-    label_counts = count_labels_per_subject(subject_set)
+def plot_subject_labels(subject_set, sisfall_dataset_processed_path):
+    label_counts = count_labels_per_subject(subject_set, sisfall_dataset_processed_path)
     width = 0.3
 
     fig, ax = plt.subplots()

@@ -1,4 +1,6 @@
-import numpy as np
+import os
+from pathlib import Path
+from dotenv import load_dotenv
 import tensorflow as tf
 import keras
 from sklearn.model_selection import KFold
@@ -45,16 +47,17 @@ def compile_model(tinyCNN_model_instance, lr = LEARNING_RATE, alpha = ALPHA, gam
             keras.metrics.AUC(),
         ])
 
-def fit_model(tinyCNN_model_instance: keras.Model, train_dataset: tf.data.Dataset, val_dataset: tf.data.Dataset, epochs):
-    
-    history = tinyCNN_model_instance.fit(x=train_dataset, batch_size=train_dataset.batch, epochs=epochs, validation_data=val_dataset)
-    return history
 
 if __name__ == "__main__":
+    
+    load_dotenv()  
+    sisfall_dataset_processed_path = Path(os.environ.get("SISFALL_DATASET_PROCESSED_ROOT"))
+    
     kf = KFold(n_splits=N_SPLITS, random_state=5, shuffle=True)
-    fold_history = []
+
     for fold, (train_index, test_index) in enumerate(kf.split(subject_adult_list)):
         
+        csv_logger = keras.callbacks.CSVLogger(f'training_fold_{fold}.log', separator=',', append=False)
         train_set = [subject_adult_list[i] for i in train_index]
         val_set = [subject_adult_list[i] for i in test_index]
         
@@ -65,5 +68,7 @@ if __name__ == "__main__":
         
         adapt_normalization_layer(model, train_set, output_signature, BATCH_SIZE)
         compile_model(model)
-        fold_history.append(fit_model(model, train_dataset, val_dataset, EPOCHS))
+        
+        model.fit(x=train_dataset, batch_size=BATCH_SIZE, epochs=EPOCHS, validation_data=val_dataset, callbacks=[csv_logger])
+        
     

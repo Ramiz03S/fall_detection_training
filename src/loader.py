@@ -27,17 +27,14 @@ the original dataset.
 """
 
 import os
+from pathlib import Path
+from dotenv import load_dotenv
 import pandas as pd
+
 
 
 ADXL345_factor = (2 * 16) / (2 ** 13)
 ITG3200_factor = (2 * 2000) / (2 ** 16)
-
-
-sisfall_dataset_path = "PC\\datasets\\SisFall_dataset\\"
-sisfall_dataset_loaded_path = "PC\\datasets\\SisFall_dataset_loaded\\"
-sisfall_dataset_annotated_path = "PC\\datasets\\SisFall_temporally_annotated\\"
-
 
 SubjectAdultList = [f"SA{str(i).zfill(2)}" for i in range(1, 24)]
 SubjectElderlyList = [f"SE{str(i).zfill(2)}" for i in range(1, 16)]
@@ -50,22 +47,26 @@ Columns = Columns_ADXL345 + Columns_ITG3200 + Columns_MMA8451Q
 
 if __name__ == "__main__":
     
+    load_dotenv()  
+    
+    sisfall_dataset_path = Path(os.environ.get("SISFALL_DATASET_ROOT"))
+    sisfall_dataset_annotated_path = Path(os.environ.get("SISFALL_TEMPORAL_ANNOTATIONS_ROOT"))
+    sisfall_dataset_loaded_path = Path(os.environ.get("SISFALL_DATASET_LOADED_ROOT"))
+    
     for subject in SubjectAdultList + SubjectElderlyList:
         
-        subject_files = [f for f in os.listdir(sisfall_dataset_path + subject)]
         
-        # make new dir to store the loaded dataset
-        os.makedirs(sisfall_dataset_loaded_path + subject, exist_ok=True) 
+        (sisfall_dataset_loaded_path/subject).mkdir(parents=True, exist_ok=True)
         
-        for file in subject_files:
+        for file in (sisfall_dataset_path/subject).iterdir():
             
-            if file.endswith(".txt"): # so that pd.read_csv skips non text files
+            if file.suffix == '.txt': # so that pd.read_csv skips non text files
                 
-                sensor_df = pd.read_csv(sisfall_dataset_path + subject + "\\" + file, names=Columns)
+                sensor_df = pd.read_csv(file, names=Columns)
                 sensor_df = sensor_df.iloc[:, [0,1,2,3,4,5]]
                 # TODO: assumed that the ADXL345 accelerometer was used
                 
-                label_df = pd.read_csv(sisfall_dataset_annotated_path + subject + "\\" + file, names=["Label"])
+                label_df = pd.read_csv(sisfall_dataset_annotated_path/subject/file.name, names=["Label"])
                 trial_df = pd.concat([sensor_df, label_df], axis=1)
                 
                 # Conversion from bits into g and deg/sec units
@@ -78,4 +79,4 @@ if __name__ == "__main__":
                 trial_df["Label"] = trial_df["Label"].replace(2,1)
                 
                 
-                trial_df.to_csv(sisfall_dataset_loaded_path + subject + "\\" + file, index=False)
+                trial_df.to_csv(sisfall_dataset_loaded_path/subject/file.name, index=False)
