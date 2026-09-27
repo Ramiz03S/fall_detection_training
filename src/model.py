@@ -7,14 +7,14 @@ import keras
 from sklearn.model_selection import KFold
 from dataset_utils import make_dataset
 
-RUN = 3
+RUN = 1
 RUN_DESCRIPTION = ""
 EPOCHS = 200
 BATCH_SIZE = 512
 ALPHA = 0.25
 GAMMA = 2
 LEARNING_RATE = 0.0005
-N_SPLITS = 5
+N_SPLITS = 2
 RAND_STATE = 5
 
 output_signature_window = tf.TensorSpec(shape=(6,50,1), dtype=tf.float32)
@@ -85,9 +85,6 @@ if __name__ == "__main__":
         "dataset_used": SUBJECTS            
     }
     
-    with open(runs_path/f'run_{RUN}'/'hparams.json', "w") as f:
-        json.dump(hparams, f, indent=4)
-    
     kf = KFold(n_splits=N_SPLITS, random_state=RAND_STATE, shuffle=True)
 
     for fold, (train_index, test_index) in enumerate(kf.split(SUBJECTS)):
@@ -100,6 +97,9 @@ if __name__ == "__main__":
         train_set = [SUBJECTS[i] for i in train_index]
         val_set = [SUBJECTS[i] for i in test_index]
         
+        with open(runs_path/f'run_{RUN}'/f'fold_{fold}_hparams.json', "w") as f:
+            json.dump(hparams | {'train_set':train_set, 'val_set':val_set}, f, indent=4)
+        
         train_dataset = make_dataset(train_set, output_signature, with_labels=True, batch_size=BATCH_SIZE)
         val_dataset = make_dataset(val_set, output_signature, with_labels=True, batch_size=BATCH_SIZE)
         
@@ -109,6 +109,8 @@ if __name__ == "__main__":
         compile_model(model)
         
         model.fit(x=train_dataset, batch_size=BATCH_SIZE, epochs=EPOCHS, validation_data=val_dataset, callbacks=[csv_logger, checkpoint, tensorboard])
+        
+        
         
         
         

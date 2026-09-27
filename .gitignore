@@ -4,3 +4,4 @@ src/__pycache__
 .env
 *.png
 from_gpu
+runs
