@@ -7,14 +7,14 @@ import keras
 from sklearn.model_selection import KFold
 from dataset_utils import make_dataset
 
-RUN = 1
+RUN = 0
 RUN_DESCRIPTION = ""
 EPOCHS = 200
 BATCH_SIZE = 512
 ALPHA = 0.25
 GAMMA = 2
 LEARNING_RATE = 0.0005
-N_SPLITS = 2
+N_SPLITS = 5
 RAND_STATE = 5
 
 output_signature_window = tf.TensorSpec(shape=(6,50,1), dtype=tf.float32)
@@ -25,7 +25,7 @@ subject_adult_list = [f"SA{str(i).zfill(2)}" for i in range(1, 24)]
 subject_elderly_list = [f"SE{str(i).zfill(2)}" for i in range(1, 16)]
 subject_list = subject_adult_list + subject_elderly_list
 
-SUBJECTS = subject_list
+SUBJECTS = subject_adult_list
 
 def make_TinyCNN():
     
@@ -92,7 +92,7 @@ if __name__ == "__main__":
         
         csv_logger = keras.callbacks.CSVLogger(runs_path/f'run_{RUN}'/'metrics'/f'fold_{fold}.log', separator=',', append=False)
         checkpoint = keras.callbacks.ModelCheckpoint(runs_path/f'run_{RUN}'/'models'/f'fold_{fold}.keras', save_best_only=True)
-        tensorboard = tf.keras.callbacks.TensorBoard(runs_path/f'run_{RUN}'/'tensorboard')
+        tensorboard = tf.keras.callbacks.TensorBoard(runs_path/f'run_{RUN}'/'tensorboard'/f'fold_{fold}')
         
         train_set = [SUBJECTS[i] for i in train_index]
         val_set = [SUBJECTS[i] for i in test_index]
