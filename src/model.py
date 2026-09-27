@@ -7,8 +7,9 @@ import keras
 from sklearn.model_selection import KFold
 from dataset_utils import make_dataset
 
-RUN = 0
-EPOCHS = 3
+RUN = 3
+RUN_DESCRIPTION = ""
+EPOCHS = 200
 BATCH_SIZE = 512
 ALPHA = 0.25
 GAMMA = 2
@@ -65,14 +66,12 @@ if __name__ == "__main__":
     load_dotenv()  
     
     sisfall_dataset_processed_path = Path(os.environ.get("SISFALL_DATASET_PROCESSED_ROOT"))
+    runs_path = Path(os.environ.get("RUNS_ROOT"))
+   
     
-    model_checkpoint_path = Path(os.environ.get("MODEL_CHECKPOINT_ROOT"))
-    model_logs_path = Path(os.environ.get("MODEL_LOGS_ROOT"))
-    tensorboard_logs_path = Path(os.environ.get("TENSORBOARD_LOGS_ROOT"))
-    
-    (model_checkpoint_path/f'run_{RUN}').mkdir(parents=True, exist_ok=True)
-    (model_logs_path/f'run_{RUN}').mkdir(parents=True, exist_ok=True)
-    (tensorboard_logs_path/f'run_{RUN}').mkdir(parents=True, exist_ok=True)
+    (runs_path/f'run_{RUN}'/'models').mkdir(parents=True, exist_ok=True)
+    (runs_path/f'run_{RUN}'/'metrics').mkdir(parents=True, exist_ok=True)
+    (runs_path/f'run_{RUN}'/'tensorboard').mkdir(parents=True, exist_ok=True)
     
     hparams = {
         "learning_rate": LEARNING_RATE,
@@ -82,9 +81,11 @@ if __name__ == "__main__":
         "gamma": GAMMA,
         "n_splits": N_SPLITS,
         "rand_state": RAND_STATE,
+        "run_description": RUN_DESCRIPTION,
         "dataset_used": SUBJECTS            
     }
-    with open(model_logs_path/f'run_{RUN}'/"hparams.json", "w") as f:
+    
+    with open(runs_path/f'run_{RUN}'/'hparams.json', "w") as f:
         json.dump(hparams, f, indent=4)
     
     kf = KFold(n_splits=N_SPLITS, random_state=RAND_STATE, shuffle=True)
@@ -92,9 +93,9 @@ if __name__ == "__main__":
     for fold, (train_index, test_index) in enumerate(kf.split(SUBJECTS)):
         
         
-        csv_logger = keras.callbacks.CSVLogger(model_logs_path/f'run_{RUN}'/f'fold_{fold}.log', separator=',', append=False)
-        checkpoint = keras.callbacks.ModelCheckpoint(model_checkpoint_path/f'run_{RUN}'/f'fold_{fold}.keras', save_best_only=True)
-        tensorboard = tf.keras.callbacks.TensorBoard(tensorboard_logs_path/f'run_{RUN}'/'logs')
+        csv_logger = keras.callbacks.CSVLogger(runs_path/f'run_{RUN}'/'metrics'/f'fold_{fold}.log', separator=',', append=False)
+        checkpoint = keras.callbacks.ModelCheckpoint(runs_path/f'run_{RUN}'/'models'/f'fold_{fold}.keras', save_best_only=True)
+        tensorboard = tf.keras.callbacks.TensorBoard(runs_path/f'run_{RUN}'/'tensorboard')
         
         train_set = [SUBJECTS[i] for i in train_index]
         val_set = [SUBJECTS[i] for i in test_index]
@@ -109,6 +110,6 @@ if __name__ == "__main__":
         
         model.fit(x=train_dataset, batch_size=BATCH_SIZE, epochs=EPOCHS, validation_data=val_dataset, callbacks=[csv_logger, checkpoint, tensorboard])
         
-        break
+        
         
     
