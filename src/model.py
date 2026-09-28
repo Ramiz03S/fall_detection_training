@@ -7,11 +7,11 @@ import keras
 from sklearn.model_selection import KFold, StratifiedKFold
 from dataset_utils import make_dataset
 
-RUN = 0
-RUN_DESCRIPTION = ""
+RUN = 2
+RUN_DESCRIPTION = "note: changed the alpha scheme from now on."
 EPOCHS = 200
 BATCH_SIZE = 512
-ALPHA = 0.25
+ALPHA = 1
 GAMMA = 2
 LEARNING_RATE = 0.0005
 N_SPLITS = 5
@@ -51,7 +51,7 @@ def compile_model(tinyCNN_model_instance, lr = LEARNING_RATE, alpha = ALPHA, gam
     tinyCNN_model_instance.compile(
         optimizer=keras.optimizers.Adam(learning_rate=lr), 
         jit_compile=False,
-        loss=keras.losses.CategoricalFocalCrossentropy(alpha=[alpha, 1 - alpha], gamma=gamma),
+        loss=keras.losses.CategoricalFocalCrossentropy(alpha=alpha, gamma=gamma),
         metrics=[
             # keras.metrics.CategoricalAccuracy(),
             keras.metrics.Recall(class_id=1, name="sensitivity"), 
