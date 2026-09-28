@@ -4,11 +4,14 @@ from dotenv import load_dotenv
 import numpy as np
 import tensorflow as tf
 from collections import Counter
+from sklearn.model_selection import KFold, StratifiedKFold
 import matplotlib.pyplot as plt
 
 subject_adult_list = [f"SA{str(i).zfill(2)}" for i in range(1, 24)]
 subject_elderly_list = [f"SE{str(i).zfill(2)}" for i in range(1, 16)]
 subject_list = subject_adult_list + subject_elderly_list
+# 0 subjects are complete with falls and adl, 1 subjects just have adls
+subject_type = [0 for _ in range(1,24)] + [1 for _ in range(1,6)] + [0] + [1 for _ in range(7,16)]
 
 output_signature_window = tf.TensorSpec(shape=(6,50,1), dtype=tf.float32)
 output_signature_label = tf.TensorSpec(shape=(2,), dtype=tf.int32)
@@ -66,6 +69,19 @@ def count_labels(subject_set, sisfall_dataset_processed_path):
             labels_unencoded = np.argmax(labels_oneshot_encoded, axis=1)
             count.update(labels_unencoded)
     return count
+
+def count_labels_stratified_kfold(n_splits, random_state, sisfall_dataset_processed_path):
+    skf = StratifiedKFold(n_splits=n_splits, random_state=random_state, shuffle=True)
+    for fold, (train_index, test_index) in enumerate(skf.split(subject_list, subject_type)):
+        
+        train_set = [subject_list[i] for i in train_index]
+        val_set = [subject_list[i] for i in test_index]
+        train_count = count_labels(train_set, sisfall_dataset_processed_path)
+        val_count = count_labels(val_set, sisfall_dataset_processed_path)
+        
+        print(f"fold {fold} train set has: {train_count[0]} ADLs, {train_count[1]} falls, {(train_count[1]/train_count[0]):.2f} fall to ADL ratio")
+        print(f"fold {fold} val set has: {val_count[0]} ADLs, {val_count[1]} falls, {(val_count[1]/val_count[0]):.2f} fall to ADL ratio")
+        
 
 def count_labels_per_subject(subject_set, sisfall_dataset_processed_path):
     adl_array = []
