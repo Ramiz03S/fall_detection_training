@@ -56,6 +56,7 @@ if __name__ == "__main__":
                 fall_indicies = np.where(labels == 1)
                 last_fall_index = fall_indicies[0][-1]
                 labels[last_fall_index + 1: last_fall_index + 50 + 1] = 1
+                # TODO: Cut out data after the end of the fall like the paper suggested, and watch out for out of bounds error
                 
             # perform sliding windows of length 50 samples, and stride 10 samples
             windows_view = sliding_window_view(trial_np, 50, axis=0)[::10]
