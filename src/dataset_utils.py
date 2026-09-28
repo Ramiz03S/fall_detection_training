@@ -6,9 +6,15 @@ import tensorflow as tf
 from collections import Counter
 from sklearn.model_selection import KFold, StratifiedKFold
 import matplotlib.pyplot as plt
+import keras
+
+
+
+CH_NAMES = ["acc_x", "acc_y", "acc_z", "gyr_x", "gyr_y", "gyr_z"]
 
 subject_adult_list = [f"SA{str(i).zfill(2)}" for i in range(1, 24)]
 subject_elderly_list = [f"SE{str(i).zfill(2)}" for i in range(1, 16)]
+
 subject_list = subject_adult_list + subject_elderly_list
 # 0 subjects are complete with falls and adl, 1 subjects just have adls
 subject_type = [0 for _ in range(1,24)] + [1 for _ in range(1,6)] + [0] + [1 for _ in range(7,16)]
@@ -61,6 +67,8 @@ def make_dataset(subject_set, output_signature, with_labels, batch_size=None,
 
     return dataset
 
+
+
 def count_labels(subject_set, sisfall_dataset_processed_path):
     count = Counter()
     for subject in subject_set:
@@ -111,23 +119,79 @@ def plot_subject_labels(subject_set, sisfall_dataset_processed_path):
 
     plt.show()
 
-
-
-'''
-
-kf = KFold(n_splits=5, random_state=0, shuffle=True)
-for i, (train_index, test_index) in enumerate(kf.split(subject_adult_list)):
-    print(f"Fold {i}: ")
-    train_count = count_labels([subject_adult_list[idx] for idx in train_index])
-    test_count = count_labels([subject_adult_list[idx] for idx in test_index])
-    print(f"  Train Fall to ADL ratio: {train_count[2]/train_count[0]:.4f}")
-    print(f"  Test Fall to ADL ratio:  {test_count[2]/test_count[0]:.4f}")
-    #print(f"  Train: ", [subject_adult_list[idx] for idx in train_index])
-    #print(f"  Test:  ", [subject_adult_list[idx] for idx in test_index])
+ 
+def window_mean_std(X):
+    X = np.squeeze(np.asarray(X), axis=-1)
+    return X.mean(axis=2), X.std(axis=2)
+ 
+def plot_before_after(windows, labels, norm_layer, title=""):
     
-'''
+    is_fall = labels.argmax(axis=1) == 1
+    windows_norm = np.asarray(norm_layer(windows))
+ 
+    rows = {
+        "before normalization": window_mean_std(windows),
+        "globally normalized": window_mean_std(windows_norm),
+    }
+ 
+    fig, axes = plt.subplots(2, 6, figsize=(20, 7), sharex="row", sharey="row",
+                             layout="constrained")
+ 
+    for r, (row_name, (mu, sd)) in enumerate(rows.items()): 
+        for c, ch in enumerate(CH_NAMES):
+            ax = axes[r, c]
+            
+            for fall, name, color, size, alpha in [(False, "ADL", "#7f7f7f", 4, 0.3),
+                                                   (True, "Fall", "#d62728", 8, 0.6)]:
+                m = (is_fall == fall) & (sd[:, c] > 0)
+                ax.scatter(mu[m, c], sd[m, c], s=size, color=color, alpha=alpha,
+                           edgecolors="none", rasterized=True,
+                           label=f"{name} (n={m.sum():,})")
+            ax.set_yscale("log")
+            ax.set_xlabel("window mean")
+            if r == 0:
+                ax.set_title(ch)
+        axes[r, 0].set_ylabel(f"{row_name}\nwindow std (log)")
+ 
+    leg = axes[0, 0].legend(markerscale=3, fontsize=8, loc="upper left")
+    for h in leg.legend_handles:
+        h.set_alpha(1)
+    fig.suptitle(title)
+    return fig
+
 
 if __name__ == "__main__":
+    
+    load_dotenv()  
+    sisfall_dataset_processed_path = Path(os.environ.get("SISFALL_DATASET_PROCESSED_ROOT"))
+
+    layer = keras.layers.Normalization(axis=1, mean=[-0.01455288, -0.66143745, -0.08338201, -0.7908044,   2.058332,   -0.21747877], variance = [1.9349502e-01, 3.6206144e-01, 2.4309219e-01, 1.0970309e+03, 9.0329828e+02, 5.6539557e+02])
+    # layer.adapt(make_dataset(subject_adult_list, output_signature=output_signature, batch_size=512, with_labels=False))
+    # [-0.01455288 -0.66143745 -0.08338201 -0.7908044   2.058332   -0.21747877]
+    # [1.9349502e-01 3.6206144e-01 2.4309219e-01 1.0970309e+03 9.0329828e+02 5.6539557e+02]
+    
+    with np.load(sisfall_dataset_processed_path/f"{subject_adult_list[1]}.npz") as subject_data:
+        windows = subject_data['windows']
+        labels = subject_data['labels']
+        
+    #fig = plot_before_after(windows, labels, layer,title="SA02: per-window mean vs std, before and after global normalization (layer adapted on fold 1 training subjects)")
+    #fig.savefig("meanstd_before_after.png", dpi=300, bbox_inches="tight")
+    #plt.show()
+    
+    #count_labels_stratified_kfold(5, 5, sisfall_dataset_processed_path)
+    '''
+    fold 0 train set has: 596892 ADLs, 14128 falls, 0.02 fall to ADL ratio
+    fold 0 val set has: 158519 ADLs, 4144 falls, 0.03 fall to ADL ratio
+    fold 1 train set has: 597120 ADLs, 14625 falls, 0.02 fall to ADL ratio
+    fold 1 val set has: 158291 ADLs, 3647 falls, 0.02 fall to ADL ratio
+    fold 2 train set has: 593633 ADLs, 14554 falls, 0.02 fall to ADL ratio
+    fold 2 val set has: 161778 ADLs, 3718 falls, 0.02 fall to ADL ratio
+    fold 3 train set has: 608645 ADLs, 14593 falls, 0.02 fall to ADL ratio
+    fold 3 val set has: 146766 ADLs, 3679 falls, 0.03 fall to ADL ratio
+    fold 4 train set has: 625354 ADLs, 15188 falls, 0.02 fall to ADL ratio
+    fold 4 val set has: 130057 ADLs, 3084 falls, 0.02 fall to ADL ratio
+    '''
+    
     pass
         
         
