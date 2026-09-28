@@ -104,7 +104,7 @@ def count_labels_per_subject(subject_set, sisfall_dataset_processed_path):
         
     return {"ADL": np.array(adl_array), "FALL": np.array(fall_array)}
         
-def plot_subject_labels(subject_set, sisfall_dataset_processed_path):
+def plot_subject_labels(subject_set, sisfall_dataset_processed_path, save_dir):
     label_counts = count_labels_per_subject(subject_set, sisfall_dataset_processed_path)
     width = 0.3
 
@@ -117,14 +117,17 @@ def plot_subject_labels(subject_set, sisfall_dataset_processed_path):
 
     ax.legend(loc="upper right")
 
-    plt.show()
-
+    fig.savefig(save_dir/"subjects_label_distribution.png", dpi=300, bbox_inches="tight")
  
 def window_mean_std(X):
     X = np.squeeze(np.asarray(X), axis=-1)
     return X.mean(axis=2), X.std(axis=2)
  
-def plot_before_after(windows, labels, norm_layer, title=""):
+def plot_before_after(subject, norm_layer, title, save_dir):
+    
+    with np.load(sisfall_dataset_processed_path/f"{subject}.npz") as subject_data:
+        windows = subject_data['windows']
+        labels = subject_data['labels']
     
     is_fall = labels.argmax(axis=1) == 1
     windows_norm = np.asarray(norm_layer(windows))
@@ -157,26 +160,24 @@ def plot_before_after(windows, labels, norm_layer, title=""):
     for h in leg.legend_handles:
         h.set_alpha(1)
     fig.suptitle(title)
-    return fig
+    
+    fig.savefig(save_dir/f"meanstd_before_after_{subject}.png", dpi=300, bbox_inches="tight")
 
 
 if __name__ == "__main__":
     
     load_dotenv()  
     sisfall_dataset_processed_path = Path(os.environ.get("SISFALL_DATASET_PROCESSED_ROOT"))
+    plot_save_path = Path(os.environ.get("PLOT_SAVE_ROOT"))
+    plot_save_path.mkdir(parents=True, exist_ok=True)
 
     layer = keras.layers.Normalization(axis=1, mean=[-0.01455288, -0.66143745, -0.08338201, -0.7908044,   2.058332,   -0.21747877], variance = [1.9349502e-01, 3.6206144e-01, 2.4309219e-01, 1.0970309e+03, 9.0329828e+02, 5.6539557e+02])
     # layer.adapt(make_dataset(subject_adult_list, output_signature=output_signature, batch_size=512, with_labels=False))
     # [-0.01455288 -0.66143745 -0.08338201 -0.7908044   2.058332   -0.21747877]
     # [1.9349502e-01 3.6206144e-01 2.4309219e-01 1.0970309e+03 9.0329828e+02 5.6539557e+02]
-    
-    with np.load(sisfall_dataset_processed_path/f"{subject_adult_list[1]}.npz") as subject_data:
-        windows = subject_data['windows']
-        labels = subject_data['labels']
         
-    #fig = plot_before_after(windows, labels, layer,title="SA02: per-window mean vs std, before and after global normalization (layer adapted on fold 1 training subjects)")
-    #fig.savefig("meanstd_before_after.png", dpi=300, bbox_inches="tight")
-    #plt.show()
+    plot_before_after(subject_adult_list[0], layer,save_dir=plot_save_path, title="SA02: per-window mean vs std, before and after global normalization (layer adapted on fold 1 training subjects)")
+    plot_subject_labels(subject_list, sisfall_dataset_processed_path, plot_save_path)
     
     #count_labels_stratified_kfold(5, 5, sisfall_dataset_processed_path)
     '''

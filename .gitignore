@@ -5,3 +5,4 @@ src/__pycache__
 *.png
 from_gpu
 runs
+plots
