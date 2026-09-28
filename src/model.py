@@ -4,7 +4,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 import tensorflow as tf
 import keras
-from sklearn.model_selection import KFold
+from sklearn.model_selection import KFold, StratifiedKFold
 from dataset_utils import make_dataset
 
 RUN = 0
@@ -25,7 +25,10 @@ subject_adult_list = [f"SA{str(i).zfill(2)}" for i in range(1, 24)]
 subject_elderly_list = [f"SE{str(i).zfill(2)}" for i in range(1, 16)]
 subject_list = subject_adult_list + subject_elderly_list
 
-SUBJECTS = subject_adult_list
+# 0 subjects are complete with falls and adl, 1 subjects just have adls
+subject_type = [0 for _ in range(1,24)] + [1 for _ in range(1,6)] + [0] + [1 for _ in range(7,16)]
+
+SUBJECTS = subject_list
 
 def make_TinyCNN():
     
@@ -89,9 +92,11 @@ if __name__ == "__main__":
         "dataset_used": SUBJECTS            
     }
     
-    kf = KFold(n_splits=N_SPLITS, random_state=RAND_STATE, shuffle=True)
+    # kf = KFold(n_splits=N_SPLITS, random_state=RAND_STATE, shuffle=True)
+    skf = StratifiedKFold(n_splits=N_SPLITS, random_state=RAND_STATE, shuffle=True)
 
-    for fold, (train_index, test_index) in enumerate(kf.split(SUBJECTS)):
+    for fold, (train_index, test_index) in enumerate(skf.split(subject_list, subject_type)):
+    # for fold, (train_index, test_index) in enumerate(kf.split(SUBJECTS)):
         
         
         csv_logger = keras.callbacks.CSVLogger(runs_path/f'run_{RUN}'/'metrics'/f'fold_{fold}.log', separator=',', append=False)
