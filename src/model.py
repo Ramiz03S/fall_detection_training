@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 import tensorflow as tf
 import keras
 from sklearn.model_selection import KFold, StratifiedKFold
-from dataset_utils import make_dataset
+from dataset_utils import make_dataset, make_X_Y
 
 RUN = 2
 RUN_DESCRIPTION = "note: changed the alpha scheme from now on."
@@ -109,15 +109,17 @@ if __name__ == "__main__":
         with open(runs_path/f'run_{RUN}'/f'fold_{fold}_hparams.json', "w") as f:
             json.dump(hparams | {'train_set':train_set, 'val_set':val_set}, f, indent=4)
         
-        train_dataset = make_dataset(train_set, output_signature, with_labels=True, batch_size=BATCH_SIZE)
-        val_dataset = make_dataset(val_set, output_signature, with_labels=True, batch_size=BATCH_SIZE)
+        # train_dataset = make_dataset(train_set, output_signature, with_labels=True, batch_size=BATCH_SIZE)
+        # val_dataset = make_dataset(val_set, output_signature, with_labels=True, batch_size=BATCH_SIZE)
+        X_train, Y_train = make_X_Y(train_set, sisfall_dataset_processed_path)
+        X_val, Y_val = make_X_Y(val_set, sisfall_dataset_processed_path)
         
         model = make_TinyCNN()
         
         adapt_normalization_layer(model, train_set, output_signature, BATCH_SIZE)
         compile_model(model)
         
-        model.fit(x=train_dataset, batch_size=BATCH_SIZE, epochs=EPOCHS, validation_data=val_dataset, callbacks=[csv_logger, checkpoint, tensorboard])
+        model.fit(x=X_train, y=Y_train, shuffle=True, batch_size=BATCH_SIZE, epochs=EPOCHS, validation_data=(X_val, Y_val), callbacks=[csv_logger, checkpoint, tensorboard])
         
         
         

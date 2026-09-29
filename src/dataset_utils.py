@@ -67,7 +67,15 @@ def make_dataset(subject_set, output_signature, with_labels, batch_size=None,
 
     return dataset
 
-
+def make_X_Y(subject_set, sisfall_dataset_processed_path):
+    
+    with np.load(sisfall_dataset_processed_path/f"{subject_set[0]}.npz") as subject_data:
+                X, Y = (subject_data['windows'], subject_data['labels'])
+    for subject in subject_set[1:]:
+        with np.load(sisfall_dataset_processed_path/f"{subject}.npz") as subject_data:
+            X = np.concatenate([X, subject_data['windows']], axis=0)
+            Y = np.concatenate([Y, subject_data['labels']], axis=0)
+    return X, Y  
 
 def count_labels(subject_set, sisfall_dataset_processed_path):
     count = Counter()
