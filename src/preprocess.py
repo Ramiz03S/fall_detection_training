@@ -1,6 +1,7 @@
 """
 Iterates over each subjects trials. For each it first performs downsampling for 200 Hz to 100 Hz. 
 Then for trials containing falls, it extends the fall phase by 50 samples (0.5 seconds). 
+Cuts the trial short 50 samples after the extended fall phase to remove the lying on ground portion.
 Then a sliding window is performed over the trial's data of length 50 samples and stride 10 samples. 
 Each windows label is determined as FALL if it has 40% or more of its samples annotated 
 with 1 (fall), otherwise its ADL. The windows and labels generated across all the trials of each subjects are concatenated together.
@@ -32,7 +33,6 @@ if __name__ == "__main__":
 
     for subject in SubjectAdultList + SubjectElderlyList:
     
-        
         subject_windows = []
         subject_labels = []
         
@@ -55,8 +55,14 @@ if __name__ == "__main__":
                 labels = trial_np[:, -1]
                 fall_indicies = np.where(labels == 1)
                 last_fall_index = fall_indicies[0][-1]
-                labels[last_fall_index + 1: last_fall_index + 50 + 1] = 1
-                # TODO: Cut out data after the end of the fall like the paper suggested, and watch out for out of bounds error
+                extended_fall_range_end = min(labels.shape[0], last_fall_index + 50 + 1)
+                labels[last_fall_index + 1: extended_fall_range_end] = 1
+                
+                # we now cut the remainder of the trial after the extended fall period as advised by the paper
+                # will cut after 50 more samples after the extended fall period, to allow for more windows over the fall range
+                trial_cut_range_end = min(extended_fall_range_end + 50, labels.shape[0])
+                trial_np = trial_np[:trial_cut_range_end]
+                
                 
             # perform sliding windows of length 50 samples, and stride 10 samples
             windows_view = sliding_window_view(trial_np, 50, axis=0)[::10]
@@ -73,6 +79,6 @@ if __name__ == "__main__":
             subject_labels.append(window_labels.astype(np.int32))
         
         subject_windows = np.concatenate((subject_windows)).reshape((-1, 6, 50 , 1)) # shape (n, 6, 50 , 1)
-        subject_labels = to_categorical(np.concatenate((subject_labels)), num_classes=2) # shape (n, 1)
+        subject_labels = to_categorical(np.concatenate((subject_labels)), num_classes=2) # shape (n, 2)
         
         np.savez(sisfall_dataset_processed_path/f"{subject}.npz", windows=subject_windows, labels=subject_labels)
