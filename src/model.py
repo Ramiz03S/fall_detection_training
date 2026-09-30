@@ -26,7 +26,6 @@ output_signature = (output_signature_window, output_signature_label)
 subject_adult_list = [f"SA{str(i).zfill(2)}" for i in range(1, 24)]
 subject_elderly_list = [f"SE{str(i).zfill(2)}" for i in range(1, 16)]
 subject_list = subject_adult_list + subject_elderly_list
-
 # 0 subjects are complete with falls and adl, 1 subjects just have adls
 subject_type = [0 for _ in range(1,24)] + [1 for _ in range(1,6)] + [0] + [1 for _ in range(7,16)]
 
@@ -45,9 +44,13 @@ def make_TinyCNN():
     
     return keras.Model(inputs=inputs, outputs=outputs)
 
-def adapt_normalization_layer(tinyCNN_model_instance, train_set, output_signature, batch_size):
+def adapt_normalization_layer_g(tinyCNN_model_instance, train_set, output_signature, batch_size):
     layer = tinyCNN_model_instance.get_layer(index=1)
     layer.adapt(make_dataset(train_set, output_signature=output_signature, batch_size=batch_size, with_labels=False))
+    
+def adapt_normalization_layer(tinyCNN_model_instance, X_train):
+    layer = tinyCNN_model_instance.get_layer(index=1)
+    layer.adapt(X_train)
 
 def compile_model(tinyCNN_model_instance, lr = LEARNING_RATE, alpha = ALPHA, gamma = GAMMA):
     tinyCNN_model_instance.compile(
@@ -60,24 +63,21 @@ def compile_model(tinyCNN_model_instance, lr = LEARNING_RATE, alpha = ALPHA, gam
             # Of the actual falls, how many did the model catch (as falls)? Identifies true positives (falls)
             # miss rate is (1 − sensitivity)
             keras.metrics.Recall(class_id=0, name="specificity"), 
-            # Of the actual negatives (ADL), how many did the model correctly reject (as falls)? Identifies true negatices (ADL)
+            # Of the actual negatives (ADL), how many did the model correctly reject (as falls)? Identifies true negatives (ADL)
             # 1 − specificity is the false alarm rate
         ])
 
 
 if __name__ == "__main__":
     
-    
     devices = tf.config.list_physical_devices('GPU')
     print("number of gpu devices: ", len(devices)) 
     print("printing tf.test.is_built_with_cuda(): ", tf.test.is_built_with_cuda())
     
     load_dotenv()  
-    
     sisfall_dataset_processed_path = Path(os.environ.get("SISFALL_DATASET_PROCESSED_ROOT"))
     runs_path = Path(os.environ.get("RUNS_ROOT"))
    
-    
     (runs_path/f'run_{RUN}'/'models').mkdir(parents=True, exist_ok=True)
     (runs_path/f'run_{RUN}'/'metrics').mkdir(parents=True, exist_ok=True)
     (runs_path/f'run_{RUN}'/'tensorboard').mkdir(parents=True, exist_ok=True)
@@ -104,7 +104,7 @@ if __name__ == "__main__":
         
         csv_logger = keras.callbacks.CSVLogger(runs_path/f'run_{RUN}'/'metrics'/f'fold_{fold}.log', separator=',', append=False)
         checkpoint = keras.callbacks.ModelCheckpoint(runs_path/f'run_{RUN}'/'models'/f'fold_{fold}.keras', save_best_only=True)
-        tensorboard = tf.keras.callbacks.TensorBoard(runs_path/f'run_{RUN}'/'tensorboard'/f'fold_{fold}')
+        tensorboard = keras.callbacks.TensorBoard(runs_path/f'run_{RUN}'/'tensorboard'/f'fold_{fold}')
         
         train_set = [SUBJECTS[i] for i in train_index]
         val_set = [SUBJECTS[i] for i in test_index]
@@ -119,13 +119,8 @@ if __name__ == "__main__":
         
         model = make_TinyCNN()
         
-        adapt_normalization_layer(model, train_set, output_signature, BATCH_SIZE)
+        # adapt_normalization_layer(model, train_set, output_signature, BATCH_SIZE)
+        adapt_normalization_layer(model, X_train)
         compile_model(model)
         
         model.fit(x=X_train, y=Y_train, shuffle=True, batch_size=BATCH_SIZE, epochs=EPOCHS, validation_data=(X_val, Y_val), callbacks=[csv_logger, checkpoint, tensorboard])
-        
-        
-        
-        
-        
-    
