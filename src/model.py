@@ -6,6 +6,7 @@ import tensorflow as tf
 import keras
 from sklearn.model_selection import KFold, StratifiedKFold
 from dataset_utils import make_dataset, make_X_Y
+from datetime import datetime
 
 RUN = 2
 RUN_DESCRIPTION = "note: changed the alpha scheme from now on."
@@ -16,6 +17,7 @@ GAMMA = 2
 LEARNING_RATE = 0.0005
 N_SPLITS = 5
 RAND_STATE = 5
+DATETIME = str(datetime.now().replace(microsecond=0))
 
 output_signature_window = tf.TensorSpec(shape=(6,50,1), dtype=tf.float32)
 output_signature_label = tf.TensorSpec(shape=(2,), dtype=tf.int32)
@@ -81,6 +83,7 @@ if __name__ == "__main__":
     (runs_path/f'run_{RUN}'/'tensorboard').mkdir(parents=True, exist_ok=True)
     
     hparams = {
+        "date_time": DATETIME,
         "learning_rate": LEARNING_RATE,
         "batch_size": BATCH_SIZE,
         "epochs": EPOCHS,
