@@ -6,9 +6,8 @@ import tensorflow as tf
 from collections import Counter
 from sklearn.model_selection import KFold, StratifiedKFold
 import matplotlib.pyplot as plt
+import random
 import keras
-
-
 
 CH_NAMES = ["acc_x", "acc_y", "acc_z", "gyr_x", "gyr_y", "gyr_z"]
 
@@ -45,6 +44,8 @@ def make_subject_dataset(subject, output_signature, with_labels):
 
 def make_dataset(subject_set, output_signature, with_labels, batch_size=None,
                   shuffle_buffer_size=1000):
+    random.seed(0)
+    random.shuffle(subject_set)
     
     output_signature = output_signature if with_labels else output_signature[0]
     
@@ -77,6 +78,45 @@ def make_X_Y(subject_set, sisfall_dataset_processed_path):
             Y = np.concatenate([Y, subject_data['labels']], axis=0)
     return X, Y  
 
+def plot_frac_from_Y(Y, batch_size, rand_state, save_dir, shuffle=True, filename = ''):
+    
+    if shuffle:
+        rng = np.random.default_rng(seed=rand_state)
+        rng.shuffle(Y)
+        
+    num_samples = Y.shape[0]
+    num_full_batches = num_samples // batch_size
+    remainder = num_samples % batch_size
+    
+    batches_idx = [i for i in range(num_full_batches)]
+    
+    
+    fracs = [np.mean(Y[idx * batch_size: (idx + 1) * batch_size, 1]) for idx in batches_idx]
+    fracs.append(np.mean(Y[num_full_batches * 512: num_full_batches * 512 + remainder, 1]))
+    
+    fig, ax = plt.subplots()
+    ax.plot(np.arange(num_full_batches + 1), fracs, linewidth=0.8)
+
+    ax.set(xlabel='batch', ylabel='fraction of falls in batch',
+        title= 'Fraction of Falls in Batches of Shuffled Dataset'if shuffle else 'Fraction of Falls in Batches of Unshuffled Dataset')
+    ax.grid()
+
+    fig.savefig(save_dir/f"Fall_fractions_{'shufled' if shuffle else 'unshufled'}_{filename}.png")
+
+def plot_frac_from_generator(subject_list, output_signature, batch_size, shuffle_buffer_size, save_dir):
+    
+    dataset = make_dataset(subject_list, output_signature, True, batch_size, shuffle_buffer_size)
+    fracs = [y.numpy()[:, 1].mean() for _, y in dataset]
+        
+    fig, ax = plt.subplots()
+    ax.plot(np.arange(len(fracs)), fracs, linewidth=0.8)
+
+    ax.set(xlabel='batch', ylabel='fraction of falls in batch',
+        title= 'Fraction of Falls in Batches of Shuffled Dataset from Generator with shuffle buffer of size {shuffle_buffer_size}')
+    ax.grid()
+
+    fig.savefig(save_dir/f"Fall_fractions_g_{shuffle_buffer_size}.png")
+
 def count_labels(subject_set, sisfall_dataset_processed_path):
     count = Counter()
     for subject in subject_set:
@@ -97,7 +137,6 @@ def count_labels_stratified_kfold(n_splits, random_state, sisfall_dataset_proces
         
         print(f"fold {fold} train set has: {train_count[0]} ADLs, {train_count[1]} falls, {(train_count[1]/train_count[0]):.2f} fall to ADL ratio")
         print(f"fold {fold} val set has: {val_count[0]} ADLs, {val_count[1]} falls, {(val_count[1]/val_count[0]):.2f} fall to ADL ratio")
-        
 
 def count_labels_per_subject(subject_set, sisfall_dataset_processed_path):
     adl_array = []
@@ -116,7 +155,7 @@ def plot_subject_labels(subject_set, sisfall_dataset_processed_path, save_dir):
     label_counts = count_labels_per_subject(subject_set, sisfall_dataset_processed_path)
     width = 0.3
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(layout="constrained")
     bottom = np.zeros(len(subject_set))
 
     for boolean, label_count in label_counts.items():
@@ -124,14 +163,15 @@ def plot_subject_labels(subject_set, sisfall_dataset_processed_path, save_dir):
         bottom += label_count
 
     ax.legend(loc="upper right")
-
-    fig.savefig(save_dir/"subjects_label_distribution.png", dpi=300, bbox_inches="tight")
+    ax.grid()
+    fig.set_size_inches(18.5, 10.5)
+    fig.savefig(save_dir/"subjects_label_distribution.png", dpi=300)
  
 def window_mean_std(X):
     X = np.squeeze(np.asarray(X), axis=-1)
     return X.mean(axis=2), X.std(axis=2)
  
-def plot_before_after(subject, norm_layer, title, save_dir):
+def plot_before_after_norm(subject, norm_layer, title, save_dir):
     
     with np.load(sisfall_dataset_processed_path/f"{subject}.npz") as subject_data:
         windows = subject_data['windows']
@@ -179,15 +219,24 @@ if __name__ == "__main__":
     plot_save_path = Path(os.environ.get("PLOT_SAVE_ROOT"))
     plot_save_path.mkdir(parents=True, exist_ok=True)
 
-    layer = keras.layers.Normalization(axis=1, mean=[-0.01455288, -0.66143745, -0.08338201, -0.7908044,   2.058332,   -0.21747877], variance = [1.9349502e-01, 3.6206144e-01, 2.4309219e-01, 1.0970309e+03, 9.0329828e+02, 5.6539557e+02])
+    X, Y_all = make_X_Y(subject_list, sisfall_dataset_processed_path)
+    X, Y_adult = make_X_Y(subject_adult_list, sisfall_dataset_processed_path)
+    plot_frac_from_Y(Y_all, 512, 0, plot_save_path, shuffle=False)
+    plot_frac_from_Y(Y_all, 512, 0, plot_save_path)
+    plot_frac_from_Y(Y_adult, 512, 0, plot_save_path, True, 'adult_list')
+    #plot_frac_from_generator(subject_list, output_signature, 512, 50000, plot_save_path)
+        
+    
+    # layer = keras.layers.Normalization(axis=1, mean=[-0.01455288, -0.66143745, -0.08338201, -0.7908044,   2.058332,   -0.21747877], variance = [1.9349502e-01, 3.6206144e-01, 2.4309219e-01, 1.0970309e+03, 9.0329828e+02, 5.6539557e+02])
     # layer.adapt(make_dataset(subject_adult_list, output_signature=output_signature, batch_size=512, with_labels=False))
     # [-0.01455288 -0.66143745 -0.08338201 -0.7908044   2.058332   -0.21747877]
-    # [1.9349502e-01 3.6206144e-01 2.4309219e-01 1.0970309e+03 9.0329828e+02 5.6539557e+02]
-        
-    plot_before_after(subject_adult_list[0], layer,save_dir=plot_save_path, title="SA02: per-window mean vs std, before and after global normalization (layer adapted on fold 1 training subjects)")
-    plot_subject_labels(subject_list, sisfall_dataset_processed_path, plot_save_path)
+    # [1.9349502e-01 3.6206144e-01 2.4309219e-01 1.0970309e+03 9.0329828e+02 5.6539557e+02]   
+    # plot_before_after_norm(subject_adult_list[0], layer,save_dir=plot_save_path, title="SA02: per-window mean vs std, before and after global normalization (layer adapted on fold 1 training subjects)")
     
-    #count_labels_stratified_kfold(5, 5, sisfall_dataset_processed_path)
+    
+    # plot_subject_labels(subject_list, sisfall_dataset_processed_path, plot_save_path)
+    
+    # count_labels_stratified_kfold(5, 5, sisfall_dataset_processed_path)
     '''
     fold 0 train set has: 596892 ADLs, 14128 falls, 0.02 fall to ADL ratio
     fold 0 val set has: 158519 ADLs, 4144 falls, 0.03 fall to ADL ratio
@@ -199,11 +248,17 @@ if __name__ == "__main__":
     fold 3 val set has: 146766 ADLs, 3679 falls, 0.03 fall to ADL ratio
     fold 4 train set has: 625354 ADLs, 15188 falls, 0.02 fall to ADL ratio
     fold 4 val set has: 130057 ADLs, 3084 falls, 0.02 fall to ADL ratio
+    
+    
+    after discarding post fall trial portion:
+    fold 0 train set has: 493554 ADLs, 14128 falls, 0.03 fall to ADL ratio
+    fold 0 val set has: 131591 ADLs, 4144 falls, 0.03 fall to ADL ratio
+    fold 1 train set has: 494798 ADLs, 14625 falls, 0.03 fall to ADL ratio
+    fold 1 val set has: 130347 ADLs, 3647 falls, 0.03 fall to ADL ratio
+    fold 2 train set has: 491569 ADLs, 14554 falls, 0.03 fall to ADL ratio
+    fold 2 val set has: 133576 ADLs, 3718 falls, 0.03 fall to ADL ratio
+    fold 3 train set has: 503990 ADLs, 14593 falls, 0.03 fall to ADL ratio
+    fold 3 val set has: 121155 ADLs, 3679 falls, 0.03 fall to ADL ratio
+    fold 4 train set has: 516669 ADLs, 15188 falls, 0.03 fall to ADL ratio
+    fold 4 val set has: 108476 ADLs, 3084 falls, 0.03 fall to ADL ratio
     '''
-    
-    pass
-        
-        
-        
-        
-    
