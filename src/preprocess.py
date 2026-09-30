@@ -16,7 +16,6 @@ import pandas as pd
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 from collections import Counter
-from keras.utils import to_categorical
 
 
 SubjectAdultList = [f"SA{str(i).zfill(2)}" for i in range(1, 24)]
@@ -36,10 +35,10 @@ if __name__ == "__main__":
         subject_windows = []
         subject_labels = []
         
-        #for file in subject_files:
+        
         for file in (sisfall_dataset_loaded_path/subject).iterdir():
             
-            trial_df = pd.read_csv(sisfall_dataset_loaded_path/subject/file.name)
+            trial_df = pd.read_csv(file)
             
             # resampling down to 100 Hz
             trial_df.index = pd.to_timedelta(np.arange(len(trial_df)) / 200, unit="s")
@@ -77,8 +76,8 @@ if __name__ == "__main__":
             
             subject_windows.append(windows_view[:,:-1].astype(np.float32))
             subject_labels.append(window_labels.astype(np.int32))
-        
+
         subject_windows = np.concatenate((subject_windows)).reshape((-1, 6, 50 , 1)) # shape (n, 6, 50 , 1)
-        subject_labels = to_categorical(np.concatenate((subject_labels)), num_classes=2) # shape (n, 2)
+        subject_labels = np.eye(2, dtype=np.int32)[np.concatenate((subject_labels))] # shape (n, 2)
         
         np.savez(sisfall_dataset_processed_path/f"{subject}.npz", windows=subject_windows, labels=subject_labels)
