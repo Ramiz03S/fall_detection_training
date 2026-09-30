@@ -103,7 +103,7 @@ if __name__ == "__main__":
         
         
         csv_logger = keras.callbacks.CSVLogger(runs_path/f'run_{RUN}'/'metrics'/f'fold_{fold}.log', separator=',', append=False)
-        checkpoint = keras.callbacks.ModelCheckpoint(runs_path/f'run_{RUN}'/'models'/f'fold_{fold}.keras', save_best_only=True)
+        checkpoint = keras.callbacks.ModelCheckpoint(runs_path/f'run_{RUN}'/'models'/f'fold_{fold}.keras')
         tensorboard = keras.callbacks.TensorBoard(runs_path/f'run_{RUN}'/'tensorboard'/f'fold_{fold}')
         
         train_set = [SUBJECTS[i] for i in train_index]
