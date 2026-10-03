@@ -2,18 +2,21 @@ import os
 import json
 from pathlib import Path
 from dotenv import load_dotenv
+from numpy import log
 import tensorflow as tf
 import keras
 from sklearn.model_selection import KFold, StratifiedKFold
 from dataset_utils import make_dataset, make_X_Y
 from datetime import datetime
 
-RUN = 2
-RUN_DESCRIPTION = "note: changed the alpha scheme from now on."
+RUN = "22_a_0.10_G_2.5_t_0.10_wN_all"
+RUN_DESCRIPTION = "Alpha [0.90, 0.10]. On the whole subject set with StratifiedKFold. Gama 2.5 instead of 2. Added threshold of [0.90, 0.10] for metric calculation. Applying norm from  X_train. Saving model on last epoch. Doing one fold"
 EPOCHS = 200
 BATCH_SIZE = 512
-ALPHA = 1
-GAMMA = 2
+ALPHA_FALLS = 0.10
+GAMMA = 2.5
+THRESHOLD_FALLS = 0.10
+RATE_FALLS = 0.03
 LEARNING_RATE = 0.0005
 N_SPLITS = 5
 RAND_STATE = 5
@@ -51,18 +54,23 @@ def adapt_normalization_layer_g(tinyCNN_model_instance, train_set, output_signat
 def adapt_normalization_layer(tinyCNN_model_instance, X_train):
     layer = tinyCNN_model_instance.get_layer(index=1)
     layer.adapt(X_train)
+    
+def output_bias_init(tinyCNN_model_instance):
+    dense_layer = tinyCNN_model_instance.layers[-1]
+    dense_layer.bias.assign(log([1 - RATE_FALLS, RATE_FALLS]).astype("float32"))
 
-def compile_model(tinyCNN_model_instance, lr = LEARNING_RATE, alpha = ALPHA, gamma = GAMMA):
+
+def compile_model(tinyCNN_model_instance, lr = LEARNING_RATE, alpha_falls = ALPHA_FALLS, gamma = GAMMA):
     tinyCNN_model_instance.compile(
         optimizer=keras.optimizers.Adam(learning_rate=lr), 
         jit_compile=False,
-        loss=keras.losses.CategoricalFocalCrossentropy(alpha=alpha, gamma=gamma),
+        loss=keras.losses.CategoricalFocalCrossentropy(alpha=[1 - alpha_falls, alpha_falls], gamma=gamma),
         metrics=[
             # keras.metrics.CategoricalAccuracy(),
-            keras.metrics.Recall(class_id=1, name="sensitivity"), 
+            keras.metrics.Recall(class_id=1, name="sensitivity", thresholds=THRESHOLD_FALLS), 
             # Of the actual falls, how many did the model catch (as falls)? Identifies true positives (falls)
             # miss rate is (1 − sensitivity)
-            keras.metrics.Recall(class_id=0, name="specificity"), 
+            keras.metrics.Recall(class_id=0, name="specificity", thresholds=1-THRESHOLD_FALLS), 
             # Of the actual negatives (ADL), how many did the model correctly reject (as falls)? Identifies true negatives (ADL)
             # 1 − specificity is the false alarm rate
         ])
@@ -87,8 +95,10 @@ if __name__ == "__main__":
         "learning_rate": LEARNING_RATE,
         "batch_size": BATCH_SIZE,
         "epochs": EPOCHS,
-        "alpha": ALPHA,
+        "alpha": ALPHA_FALLS,
         "gamma": GAMMA,
+        "threshold_falls": THRESHOLD_FALLS,
+        "rate_falls": RATE_FALLS,
         "n_splits": N_SPLITS,
         "rand_state": RAND_STATE,
         "run_description": RUN_DESCRIPTION,
@@ -118,9 +128,12 @@ if __name__ == "__main__":
         X_val, Y_val = make_X_Y(val_set, sisfall_dataset_processed_path)
         
         model = make_TinyCNN()
+        output_bias_init(model)
         
         # adapt_normalization_layer(model, train_set, output_signature, BATCH_SIZE)
         adapt_normalization_layer(model, X_train)
         compile_model(model)
         
         model.fit(x=X_train, y=Y_train, shuffle=True, batch_size=BATCH_SIZE, epochs=EPOCHS, validation_data=(X_val, Y_val), callbacks=[csv_logger, checkpoint, tensorboard])
+        
+        break
