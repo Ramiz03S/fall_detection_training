@@ -66,15 +66,17 @@ def compile_model(tinyCNN_model_instance, lr = LEARNING_RATE, alpha_falls = ALPH
         jit_compile=False,
         loss=keras.losses.CategoricalFocalCrossentropy(alpha=[1 - alpha_falls, alpha_falls], gamma=gamma),
         metrics=[
-            # keras.metrics.CategoricalAccuracy(),
+            # Recall divides true_positives by the sum of true_positives and false_negatives
             keras.metrics.Recall(class_id=1, name="sensitivity", thresholds=THRESHOLD_FALLS), 
-            # Of the actual falls, how many did the model catch (as falls)? Identifies true positives (falls)
+            # TP (correct falls) / (TP (correct falls) + FN (Falls predicted as ADLs))
+            # Of the actual falls, how many did the model catch (as falls)?
             # miss rate is (1 − sensitivity)
             keras.metrics.Recall(class_id=0, name="specificity", thresholds=1-THRESHOLD_FALLS), 
-            # Of the actual negatives (ADL), how many did the model correctly reject (as falls)? Identifies true negatives (ADL)
+            # TP (correct ADLs) / (TP (correct ADLs) + FN (ADLs predicted as Falls))
+            # Of the actual negatives (ADL), how many did the model correctly reject (as falls)? 
             # 1 − specificity is the false alarm rate
         ])
-
+            
 
 if __name__ == "__main__":
     
