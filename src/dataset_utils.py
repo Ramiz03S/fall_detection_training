@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 import numpy as np
 import tensorflow as tf
 from collections import Counter
-from sklearn.model_selection import KFold, StratifiedKFold
+from sklearn.model_selection import StratifiedKFold, train_test_split
 import matplotlib.pyplot as plt
 import random
 import keras
@@ -138,6 +138,27 @@ def count_labels_stratified_kfold(n_splits, random_state, sisfall_dataset_proces
         print(f"fold {fold} train set has: {train_count[0]} ADLs, {train_count[1]} falls, {(train_count[1]/train_count[0]):.2f} fall to ADL ratio")
         print(f"fold {fold} val set has: {val_count[0]} ADLs, {val_count[1]} falls, {(val_count[1]/val_count[0]):.2f} fall to ADL ratio")
 
+def count_labels_stratified_kfolds_wTestset(test_size, n_splits, random_state, sisfall_dataset_processed_path):
+    
+    subject_train, subject_test, subject_train_type, subject_test_type = train_test_split(subject_list, subject_type, test_size=test_size, random_state=random_state, shuffle=True, stratify=subject_type)
+    
+    skf = StratifiedKFold(n_splits=n_splits, random_state=random_state, shuffle=True)
+    
+    for fold, (train_index, val_index) in enumerate(skf.split(subject_train, subject_train_type)):
+        
+        train_set = [subject_train[i] for i in train_index]
+        val_set = [subject_train[i] for i in val_index]
+        
+        train_count = count_labels(train_set, sisfall_dataset_processed_path)
+        val_count = count_labels(val_set, sisfall_dataset_processed_path)
+        test_count = count_labels(subject_test, sisfall_dataset_processed_path)
+        
+        print(f"fold {fold} train set has: {train_count[0]} ADLs, {train_count[1]} falls, {(train_count[1]/train_count[0]):.3f} fall to ADL ratio")
+        print(f"fold {fold} val set has: {val_count[0]} ADLs, {val_count[1]} falls, {(val_count[1]/val_count[0]):.3f} fall to ADL ratio")
+        print(f"test set has: {test_count[0]} ADLs, {test_count[1]} falls, {(test_count[1]/test_count[0]):.3f} fall to ADL ratio")
+        
+        
+
 def count_labels_per_subject(subject_set, sisfall_dataset_processed_path):
     adl_array = []
     fall_array = []
@@ -219,11 +240,11 @@ if __name__ == "__main__":
     plot_save_path = Path(os.environ.get("PLOT_SAVE_ROOT"))
     plot_save_path.mkdir(parents=True, exist_ok=True)
 
-    X, Y_all = make_X_Y(subject_list, sisfall_dataset_processed_path)
-    X, Y_adult = make_X_Y(subject_adult_list, sisfall_dataset_processed_path)
-    plot_frac_from_Y(Y_all, 512, 0, plot_save_path, shuffle=False)
-    plot_frac_from_Y(Y_all, 512, 0, plot_save_path)
-    plot_frac_from_Y(Y_adult, 512, 0, plot_save_path, True, 'adult_list')
+    # X, Y_all = make_X_Y(subject_list, sisfall_dataset_processed_path)
+    # X, Y_adult = make_X_Y(subject_adult_list, sisfall_dataset_processed_path)
+    # plot_frac_from_Y(Y_all, 512, 0, plot_save_path, shuffle=False)
+    # plot_frac_from_Y(Y_all, 512, 0, plot_save_path)
+    # plot_frac_from_Y(Y_adult, 512, 0, plot_save_path, True, 'adult_list')
     #plot_frac_from_generator(subject_list, output_signature, 512, 50000, plot_save_path)
         
     
@@ -236,21 +257,11 @@ if __name__ == "__main__":
     
     # plot_subject_labels(subject_list, sisfall_dataset_processed_path, plot_save_path)
     
+    # total_count = count_labels(subject_list, sisfall_dataset_processed_path)
+    # print(f"Ratio of falls to ADLs across all subjects: {(total_count[1] / total_count[0])}")
+    
     # count_labels_stratified_kfold(5, 5, sisfall_dataset_processed_path)
     '''
-    fold 0 train set has: 596892 ADLs, 14128 falls, 0.02 fall to ADL ratio
-    fold 0 val set has: 158519 ADLs, 4144 falls, 0.03 fall to ADL ratio
-    fold 1 train set has: 597120 ADLs, 14625 falls, 0.02 fall to ADL ratio
-    fold 1 val set has: 158291 ADLs, 3647 falls, 0.02 fall to ADL ratio
-    fold 2 train set has: 593633 ADLs, 14554 falls, 0.02 fall to ADL ratio
-    fold 2 val set has: 161778 ADLs, 3718 falls, 0.02 fall to ADL ratio
-    fold 3 train set has: 608645 ADLs, 14593 falls, 0.02 fall to ADL ratio
-    fold 3 val set has: 146766 ADLs, 3679 falls, 0.03 fall to ADL ratio
-    fold 4 train set has: 625354 ADLs, 15188 falls, 0.02 fall to ADL ratio
-    fold 4 val set has: 130057 ADLs, 3084 falls, 0.02 fall to ADL ratio
-    
-    
-    after discarding post fall trial portion:
     fold 0 train set has: 493554 ADLs, 14128 falls, 0.03 fall to ADL ratio
     fold 0 val set has: 131591 ADLs, 4144 falls, 0.03 fall to ADL ratio
     fold 1 train set has: 494798 ADLs, 14625 falls, 0.03 fall to ADL ratio
@@ -262,3 +273,25 @@ if __name__ == "__main__":
     fold 4 train set has: 516669 ADLs, 15188 falls, 0.03 fall to ADL ratio
     fold 4 val set has: 108476 ADLs, 3084 falls, 0.03 fall to ADL ratio
     '''
+    
+    # count_labels_stratified_kfolds_wTestset(0.15, 5, 5, sisfall_dataset_processed_path)
+    '''
+    fold 0 train set has: 411034 ADLs, 12142 falls, 0.030 fall to ADL ratio
+    fold 0 val set has: 115398 ADLs, 3041 falls, 0.026 fall to ADL ratio
+    test set has: 98713 ADLs, 3089 falls, 0.031 fall to ADL ratio
+    fold 1 train set has: 415338 ADLs, 11857 falls, 0.029 fall to ADL ratio
+    fold 1 val set has: 111094 ADLs, 3326 falls, 0.030 fall to ADL ratio
+    test set has: 98713 ADLs, 3089 falls, 0.031 fall to ADL ratio
+    fold 2 train set has: 429186 ADLs, 12310 falls, 0.029 fall to ADL ratio
+    fold 2 val set has: 97246 ADLs, 2873 falls, 0.030 fall to ADL ratio
+    test set has: 98713 ADLs, 3089 falls, 0.031 fall to ADL ratio
+    fold 3 train set has: 424864 ADLs, 12009 falls, 0.028 fall to ADL ratio
+    fold 3 val set has: 101568 ADLs, 3174 falls, 0.031 fall to ADL ratio
+    test set has: 98713 ADLs, 3089 falls, 0.031 fall to ADL ratio
+    fold 4 train set has: 425306 ADLs, 12414 falls, 0.029 fall to ADL ratio
+    fold 4 val set has: 101126 ADLs, 2769 falls, 0.027 fall to ADL ratio
+    test set has: 98713 ADLs, 3089 falls, 0.031 fall to ADL ratio
+    '''
+    
+    pass
+    
