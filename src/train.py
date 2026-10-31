@@ -2,7 +2,7 @@ import os
 import json
 from pathlib import Path
 from dotenv import load_dotenv
-from numpy import log
+import numpy as np
 import tensorflow as tf
 import keras
 from sklearn.model_selection import StratifiedKFold, train_test_split
@@ -37,8 +37,8 @@ SUBJECTS = subject_list
 def make_TinyCNN():
     
     inputs = keras.Input(shape=(6, 50, 1))
-    normalization = keras.layers.Normalization(axis=1)(inputs)
-    temp_conv = keras.layers.Conv2D(filters=8, kernel_size=(1,16), padding="same")(normalization)
+    # normalization = keras.layers.Normalization(axis=1)(inputs)
+    temp_conv = keras.layers.Conv2D(filters=8, kernel_size=(1,16), padding="same")(inputs)
     relu1 = keras.layers.Activation('relu')(temp_conv)
     spatial_conv = keras.layers.Conv2D(filters=8, kernel_size=(6,1), padding="same")(relu1)
     relu2 = keras.layers.Activation('relu')(spatial_conv)
@@ -47,13 +47,24 @@ def make_TinyCNN():
     
     return keras.Model(inputs=inputs, outputs=outputs)
 
+# deprecated
 def adapt_normalization_layer(tinyCNN_model_instance, X_train):
     layer = tinyCNN_model_instance.get_layer(index=1)
     layer.adapt(X_train)
-    
+
+def fit_normalizer(X_train, save_path):
+
+    mean = X_train.mean(axis=(0, 2, 3), keepdims=True).astype(np.float32)
+    std = np.maximum(X_train.std(axis=(0, 2, 3), keepdims=True), 1e-7).astype(np.float32)
+    np.savez(save_path, mean=mean, std=std)
+    return mean, std
+
+def normalize(X, mean, std):
+    return ((X - mean) / std)
+
 def output_bias_init(tinyCNN_model_instance):
     dense_layer = tinyCNN_model_instance.layers[-1]
-    dense_layer.bias.assign(log([1 - RATE_FALLS, RATE_FALLS]).astype("float32"))
+    dense_layer.bias.assign(np.log([1 - RATE_FALLS, RATE_FALLS]).astype("float32"))
 
 def compile_model(tinyCNN_model_instance, lr = LEARNING_RATE, alpha_falls = ALPHA_FALLS, gamma = GAMMA):
     tinyCNN_model_instance.compile(
@@ -113,7 +124,8 @@ if __name__ == "__main__":
     for fold, (train_index, val_index) in enumerate(skf.split(train_val_set, train_val_type)):
         
         keras.backend.clear_session()
-        
+        keras.utils.set_random_seed(RAND_STATE)
+
         if fold == FOLDS_RAN:
             break
         
@@ -133,10 +145,15 @@ if __name__ == "__main__":
         
         model = make_TinyCNN()
         output_bias_init(model)
-        adapt_normalization_layer(model, X_train)
+
+        #adapt_normalization_layer(model, X_train)
+        mean, std = fit_normalizer(X_train,
+                                   save_path=runs_path/f'run_{RUN}'/f'norm_stats_fold_{fold}.npz')
+
         compile_model(model)
         model.fit(
-            x=X_train, y=Y_train,
+            x=normalize(X_train, mean, std), 
+            y=Y_train,
             shuffle=True, batch_size=BATCH_SIZE, epochs=EPOCHS,
-            validation_data=(X_val, Y_val),
+            validation_data=(normalize(X_val, mean, std), Y_val),
             callbacks=[csv_logger, checkpoint, tensorboard])

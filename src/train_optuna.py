@@ -2,6 +2,7 @@ import os
 import json
 from pathlib import Path
 from dotenv import load_dotenv
+import numpy as np
 from numpy import log, concatenate
 import tensorflow as tf
 import keras
@@ -36,8 +37,8 @@ SUBJECTS = subject_list
 def make_TinyCNN():
     
     inputs = keras.Input(shape=(6, 50, 1))
-    normalization = keras.layers.Normalization(axis=1)(inputs)
-    temp_conv = keras.layers.Conv2D(filters=8, kernel_size=(1,16), padding="same")(normalization)
+    # normalization = keras.layers.Normalization(axis=1)(inputs)
+    temp_conv = keras.layers.Conv2D(filters=8, kernel_size=(1,16), padding="same")(inputs)
     relu1 = keras.layers.Activation('relu')(temp_conv)
     spatial_conv = keras.layers.Conv2D(filters=8, kernel_size=(6,1), padding="same")(relu1)
     relu2 = keras.layers.Activation('relu')(spatial_conv)
@@ -46,10 +47,21 @@ def make_TinyCNN():
     
     return keras.Model(inputs=inputs, outputs=outputs)
 
+# deprecated
 def adapt_normalization_layer(tinyCNN_model_instance, X_train):
     layer = tinyCNN_model_instance.get_layer(index=1)
     layer.adapt(X_train)
-    
+
+def fit_normalizer(X_train, save_path):
+
+    mean = X_train.mean(axis=(0, 2, 3), keepdims=True).astype(np.float32)
+    std = np.maximum(X_train.std(axis=(0, 2, 3), keepdims=True), 1e-7).astype(np.float32)
+    np.savez(save_path, mean=mean, std=std)
+    return mean, std
+
+def normalize(X, mean, std):
+    return ((X - mean) / std)
+
 def output_bias_init(tinyCNN_model_instance, rate_falls):
     dense_layer = tinyCNN_model_instance.layers[-1]
     dense_layer.bias.assign(log([1 - rate_falls, rate_falls]).astype("float32"))
@@ -172,18 +184,23 @@ def train(trial : optuna.Trial):
         
         model = make_TinyCNN()
         output_bias_init(model, rate_falls=RATE_FALLS)
-        adapt_normalization_layer(model, X_train)
+
+        #adapt_normalization_layer(model, X_train)
+        mean, std = fit_normalizer(X_train, 
+                                   save_path=optuna_runs_path/f'study_{STUDY_NAME}'/f'run_{RUN}'/f'norm_stats_fold_{fold}.npz')
+
         compile_model(model, threshold=0.5, alpha_falls=ALPHA_FALLS, gamma=GAMMA, lr=LEARNING_RATE)
         model.fit(
-            x=X_train, y=Y_train,
+            x=normalize(X_train, mean, std),
+            y=Y_train,
             shuffle=True, batch_size=BATCH_SIZE, epochs=EPOCHS,
-            validation_data=(X_val, Y_val),
+            validation_data=(normalize(X_val, mean, std), Y_val),
             callbacks=[csv_logger, checkpoint, tensorboard, earlystopping])
         
         
         best_model = keras.models.load_model(optuna_runs_path/f'study_{STUDY_NAME}'/f'run_{RUN}'/'models'/f'fold_{fold}.keras',
                                              compile=False)
-        Y_val_predict = best_model.predict(X_val, batch_size=BATCH_SIZE)
+        Y_val_predict = best_model.predict(normalize(X_val, mean, std), batch_size=BATCH_SIZE)
         fall_probs = Y_val_predict[:,1]
         labels = Y_val.argmax(axis=1) 
         
