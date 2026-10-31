@@ -1,6 +1,8 @@
 absl-py==2.5.0
+ai-edge-litert==2.3.0
 alembic==1.20.0
 astunparse==1.6.3
+backports.strenum==1.2.8
 bottle==0.13.4
 certifi==2026.7.22
 charset-normalizer==3.5.1
