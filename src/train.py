@@ -54,8 +54,10 @@ def adapt_normalization_layer(tinyCNN_model_instance, X_train):
 
 def fit_normalizer(X_train, save_path):
 
-    mean = X_train.mean(axis=(0, 2, 3), keepdims=True).astype(np.float32)
-    std = np.maximum(X_train.std(axis=(0, 2, 3), keepdims=True), 1e-7).astype(np.float32)
+    mean = X_train.mean(axis=(0, 2, 3), keepdims=True, dtype=np.float64)
+    std = X_train.std(axis=(0, 2, 3), keepdims=True, dtype=np.float64)
+    std = np.maximum(std, 1e-7)
+    mean, std = mean.astype(np.float32), std.astype(np.float32)
     np.savez(save_path, mean=mean, std=std)
     return mean, std
 
