@@ -40,6 +40,7 @@ if __name__ == "__main__":
             
             trial_df = pd.read_csv(file)
             
+            #TODO look into the resampling technique
             # resampling down to 100 Hz
             trial_df.index = pd.to_timedelta(np.arange(len(trial_df)) / 200, unit="s")
             
