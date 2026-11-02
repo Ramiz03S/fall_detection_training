@@ -9,13 +9,13 @@ from sklearn.model_selection import StratifiedKFold, train_test_split
 from dataset_utils import make_X_Y
 from datetime import datetime
 
-RUN = ""
-RUN_DESCRIPTION = ""
-EPOCHS = 1
+RUN = "24_a_0.99_G_2.4_t_0.549_wN_all_maxspec"
+RUN_DESCRIPTION = "Following optuna trial 4, with alpha=0.99, gamma=2.4, threshold=0.549, and all subjects used for creating sets, normalization is done from outside the model, and normalization stats are saved for later use in inference. The model is trained for 200 epochs with a batch size of 512, and the best model is saved based on validation specificity."
+EPOCHS = 200
 BATCH_SIZE = 512
-ALPHA_FALLS = 0.10
-GAMMA = 2.5
-THRESHOLD_FALLS = 0.10
+ALPHA_FALLS = 0.99
+GAMMA = 2.4
+THRESHOLD_FALLS = 0.549
 RATE_FALLS = 0.03
 LEARNING_RATE = 0.0005
 N_SPLITS = 5
@@ -138,7 +138,8 @@ if __name__ == "__main__":
         X_val, Y_val = make_X_Y(val_set, sisfall_dataset_processed_path)
         
         csv_logger = keras.callbacks.CSVLogger(runs_path/f'run_{RUN}'/'metrics'/f'fold_{fold}.log', separator=',', append=False)
-        checkpoint = keras.callbacks.ModelCheckpoint(runs_path/f'run_{RUN}'/'models'/f'fold_{fold}.keras')
+        checkpoint = keras.callbacks.ModelCheckpoint(runs_path/f'run_{RUN}'/'models'/f'fold_{fold}.keras',
+                                                     monitor='val_specificity', mode='max', save_best_only=True, verbose=1)
         tensorboard = keras.callbacks.TensorBoard(runs_path/f'run_{RUN}'/'tensorboard'/f'fold_{fold}')
         
         with open(runs_path/f'run_{RUN}'/f'fold_{fold}_hparams.json', "w") as f:
