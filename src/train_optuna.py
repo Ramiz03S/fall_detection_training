@@ -13,9 +13,10 @@ from dataset_utils import make_X_Y
 from datetime import datetime
 import optuna
 
-STUDY_NAME = ""
+STUDY_NAME = "study_4"
 RAND_STATE = 5
-SEARCH_SPACE = {"alpha":[0.25,0.5,0.75], "gamma":[0, 1, 1.5, 2]}
+SEARCH_SPACE = {"alpha":[0.9, 0.95, 0.99], "gamma":[2.1, 2.2, 2.3, 2.4]}
+
 
 subject_adult_list = [f"SA{str(i).zfill(2)}" for i in range(1, 24)]
 subject_elderly_list = [f"SE{str(i).zfill(2)}" for i in range(1, 16)]
@@ -32,6 +33,9 @@ DATETIME = str(datetime.now().replace(microsecond=0))
 TEST_SIZE = 0.15
 FOLDS_RAN = 5
 SUBJECTS = subject_list
+PATIENCE = 20
+DELTA = 0.001
+START_FROM_EPOCH = 20
 
 
 def make_TinyCNN():
@@ -144,6 +148,9 @@ def train(trial : optuna.Trial):
         "rate_falls": RATE_FALLS,
         "n_splits": N_SPLITS,
         "rand_state": RAND_STATE,
+        "patience" : PATIENCE,
+        "delta" : DELTA,
+        "start_from_epoch" :START_FROM_EPOCH,
         "run_description": RUN_DESCRIPTION,
         "dataset_used": SUBJECTS
     }
@@ -176,9 +183,9 @@ def train(trial : optuna.Trial):
                                                      monitor="val_spec_at_sens98", save_best_only=True, mode="max")
         tensorboard = keras.callbacks.TensorBoard(optuna_runs_path/f'study_{STUDY_NAME}'/f'run_{RUN}'/'tensorboard'/f'fold_{fold}')
         earlystopping = keras.callbacks.EarlyStopping(monitor="val_spec_at_sens98", 
-                                                      mode="max", patience=10, 
-                                                      start_from_epoch=20, 
-                                                      min_delta=0.01)
+                                                      mode="max", patience=PATIENCE, 
+                                                      start_from_epoch=START_FROM_EPOCH, 
+                                                      min_delta=DELTA)
         
         with open(optuna_runs_path/f'study_{STUDY_NAME}'/f'run_{RUN}'/f'fold_{fold}_hparams.json', "w") as f:
             json.dump(hparams | {'train_set':train_set, 'val_set':val_set}, f, indent=4)
@@ -232,4 +239,4 @@ if __name__ == "__main__":
     
     study = optuna_init(STUDY_NAME)
     
-    study.optimize(train, n_trials=9)
+    study.optimize(train, n_trials=12)
