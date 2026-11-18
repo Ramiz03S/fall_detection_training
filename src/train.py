@@ -9,8 +9,8 @@ from sklearn.model_selection import StratifiedKFold, train_test_split
 from dataset_utils import make_X_Y
 from datetime import datetime
 
-RUN = "24_a_0.99_G_2.4_t_0.549_wN_all_maxspec"
-RUN_DESCRIPTION = "Following optuna trial 4, with alpha=0.99, gamma=2.4, threshold=0.549, and all subjects used for creating sets, normalization is done from outside the model, and normalization stats are saved for later use in inference. The model is trained for 200 epochs with a batch size of 512, and the best model is saved based on validation specificity."
+RUN = "25_a_0.99_G_2.4_t_0.549_wN_all_maxspec_decimate"
+RUN_DESCRIPTION = "Preporcessing done using decimate. Following optuna trial 4, with alpha=0.99, gamma=2.4, threshold=0.549, and all subjects used for creating sets, normalization is done from outside the model, and normalization stats are saved for later use in inference. The model is trained for 200 epochs with a batch size of 512, and the best model is saved based on validation specificity."
 EPOCHS = 200
 BATCH_SIZE = 512
 ALPHA_FALLS = 0.99
@@ -92,8 +92,9 @@ if __name__ == "__main__":
     print("number of gpu devices: ", len(devices)) 
     print("printing tf.test.is_built_with_cuda(): ", tf.test.is_built_with_cuda())
     
-    load_dotenv()  
+    load_dotenv(override=True)
     sisfall_dataset_processed_path = Path(os.environ.get("SISFALL_DATASET_PROCESSED_ROOT"))
+    print("DATA ROOT:", sisfall_dataset_processed_path.resolve())
     runs_path = Path(os.environ.get("RUNS_ROOT"))
    
     (runs_path/f'run_{RUN}'/'models').mkdir(parents=True, exist_ok=True)
@@ -136,6 +137,7 @@ if __name__ == "__main__":
         
         X_train, Y_train = make_X_Y(train_set, sisfall_dataset_processed_path)
         X_val, Y_val = make_X_Y(val_set, sisfall_dataset_processed_path)
+        assert np.isfinite(X_train).all() and np.isfinite(X_val).all(), "Dataset contains NaN or Inf"
         
         csv_logger = keras.callbacks.CSVLogger(runs_path/f'run_{RUN}'/'metrics'/f'fold_{fold}.log', separator=',', append=False)
         checkpoint = keras.callbacks.ModelCheckpoint(runs_path/f'run_{RUN}'/'models'/f'fold_{fold}.keras',

@@ -63,10 +63,16 @@ if __name__ == "__main__":
             if file.suffix == '.txt': # so that pd.read_csv skips non text files
                 
                 sensor_df = pd.read_csv(file, names=Columns)
-                sensor_df = sensor_df.iloc[:, [0,1,2,3,4,5]]
                 # TODO: assumed that the ADXL345 accelerometer was used
-                
+                sensor_df = sensor_df.iloc[:, [0,1,2,3,4,5]]
                 label_df = pd.read_csv(sisfall_dataset_annotated_path/subject/file.name, names=["Label"])
+
+                if len(sensor_df) != len(label_df):
+                    diff = len(label_df) - len(sensor_df)
+                    print(f"{subject}/{file.name}: labels - sensors = {diff}")
+                    n = min(len(sensor_df), len(label_df))
+                    sensor_df, label_df = sensor_df.iloc[:n], label_df.iloc[:n]
+                    
                 trial_df = pd.concat([sensor_df, label_df], axis=1)
                 
                 # Conversion from bits into g and deg/sec units

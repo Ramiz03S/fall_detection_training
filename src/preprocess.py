@@ -24,7 +24,7 @@ SubjectElderlyList = [f"SE{str(i).zfill(2)}" for i in range(1, 16)]
 
 def preprocess(resampling_method="decimate"):
     
-    load_dotenv()  
+    load_dotenv(override=True)  
     
     sisfall_dataset_loaded_path = Path(os.environ.get("SISFALL_DATASET_LOADED_ROOT"))
     sisfall_dataset_processed_path = Path(os.environ.get("SISFALL_DATASET_PROCESSED_ROOT"))
@@ -94,4 +94,4 @@ def preprocess(resampling_method="decimate"):
 
 
 if __name__ == "__main__":
-    preprocess()
+    preprocess(resampling_method="decimate")
