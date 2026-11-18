@@ -16,12 +16,13 @@ import pandas as pd
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 from collections import Counter
+import scipy
 
 
 SubjectAdultList = [f"SA{str(i).zfill(2)}" for i in range(1, 24)]
 SubjectElderlyList = [f"SE{str(i).zfill(2)}" for i in range(1, 16)]
 
-if __name__ == "__main__":
+def preprocess(resampling_method="decimate"):
     
     load_dotenv()  
     
@@ -40,16 +41,23 @@ if __name__ == "__main__":
             
             trial_df = pd.read_csv(file)
             
-            #TODO look into the resampling technique
             # resampling down to 100 Hz
-            trial_df.index = pd.to_timedelta(np.arange(len(trial_df)) / 200, unit="s")
-            
-            df1 = trial_df.iloc[:, [0,1,2,3,4,5]].resample("10ms").mean()
-            df2 = trial_df.iloc[:, [6]].resample("10ms").max()
-            trial_df = pd.concat([df1, df2],axis=1)
+            if resampling_method == "decimate":
+                x = trial_df.iloc[:, :6].to_numpy(dtype=float)
+                y = trial_df.iloc[:, 6].to_numpy()
+
+                x_100 = scipy.signal.decimate(x, 2, axis=0)
+                y_100 = pd.Series(y).groupby(np.arange(len(y)) // 2).max().to_numpy()
+
+                trial_np = np.concatenate((x_100, y_100.reshape(-1, 1)), axis=1)
+            elif resampling_method == "average":
+                trial_df.index = pd.to_timedelta(np.arange(len(trial_df)) / 200, unit="s")
+                df1 = trial_df.iloc[:, [0,1,2,3,4,5]].resample("10ms").mean()
+                df2 = trial_df.iloc[:, [6]].resample("10ms").max()
+                trial_df = pd.concat([df1, df2],axis=1)
+                trial_np = trial_df.to_numpy()
 
             # extending the fall phase by 0.5s at 100 Hz (50 samples)
-            trial_np = trial_df.to_numpy()
             if file.name.startswith("F"):
         
                 labels = trial_np[:, -1]
@@ -82,3 +90,8 @@ if __name__ == "__main__":
         subject_labels = np.eye(2, dtype=np.int32)[np.concatenate((subject_labels))] # shape (n, 2)
         
         np.savez(sisfall_dataset_processed_path/f"{subject}.npz", windows=subject_windows, labels=subject_labels)
+
+
+
+if __name__ == "__main__":
+    preprocess()
