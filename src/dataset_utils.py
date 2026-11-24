@@ -18,11 +18,11 @@ subject_list = subject_adult_list + subject_elderly_list
 # 0 subjects are complete with falls and adl, 1 subjects just have adls
 subject_type = [0 for _ in range(1,24)] + [1 for _ in range(1,6)] + [0] + [1 for _ in range(7,16)]
 
-output_signature_window = tf.TensorSpec(shape=(6,50,1), dtype=tf.float32)
-output_signature_label = tf.TensorSpec(shape=(2,), dtype=tf.int32)
-output_signature = (output_signature_window, output_signature_label)
+# output_signature_window = tf.TensorSpec(shape=(6,50,1), dtype=tf.float32)
+# output_signature_label = tf.TensorSpec(shape=(2,), dtype=tf.int32)
+# output_signature = (output_signature_window, output_signature_label)
 
-
+# deprecated
 def yield_subject_windows(subject, with_labels):
     load_dotenv()  
     sisfall_dataset_processed_path = Path(os.environ.get("SISFALL_DATASET_PROCESSED_ROOT"))
@@ -34,6 +34,7 @@ def yield_subject_windows(subject, with_labels):
     for window, label in zip(windows, labels):
         yield (window, label) if with_labels else window
 
+# deprecated
 def make_subject_dataset(subject, output_signature, with_labels):    
     dataset = tf.data.Dataset.from_generator(
         yield_subject_windows,
@@ -41,7 +42,7 @@ def make_subject_dataset(subject, output_signature, with_labels):
         args=(subject, with_labels)
     )
     return dataset
-
+# deprecated
 def make_dataset(subject_set, output_signature, with_labels, batch_size=None,
                   shuffle_buffer_size=1000):
     random.seed(0)
@@ -68,7 +69,23 @@ def make_dataset(subject_set, output_signature, with_labels, batch_size=None,
 
     return dataset
 
-def make_X_Y(subject_set, sisfall_dataset_processed_path):
+# deprecated
+def plot_frac_from_generator(subject_list, output_signature, batch_size, shuffle_buffer_size, save_dir):
+    
+    dataset = make_dataset(subject_list, output_signature, True, batch_size, shuffle_buffer_size)
+    fracs = [y.numpy()[:, 1].mean() for _, y in dataset]
+        
+    fig, ax = plt.subplots()
+    ax.plot(np.arange(len(fracs)), fracs, linewidth=0.8)
+
+    ax.set(xlabel='batch', ylabel='fraction of falls in batch',
+        title= 'Fraction of Falls in Batches of Shuffled Dataset from Generator with shuffle buffer of size {shuffle_buffer_size}')
+    ax.grid()
+
+    fig.savefig(save_dir/f"Fall_fractions_g_{shuffle_buffer_size}.png")
+
+
+def make_X_Y(subject_set, dataset_processed_path):
     
     with np.load(sisfall_dataset_processed_path/f"{subject_set[0]}.npz") as subject_data:
                 X, Y = (subject_data['windows'], subject_data['labels'])
@@ -103,21 +120,7 @@ def plot_frac_from_Y(Y, batch_size, rand_state, save_dir, shuffle=True, filename
 
     fig.savefig(save_dir/f"Fall_fractions_{'shufled' if shuffle else 'unshufled'}_{filename}.png")
 
-def plot_frac_from_generator(subject_list, output_signature, batch_size, shuffle_buffer_size, save_dir):
-    
-    dataset = make_dataset(subject_list, output_signature, True, batch_size, shuffle_buffer_size)
-    fracs = [y.numpy()[:, 1].mean() for _, y in dataset]
-        
-    fig, ax = plt.subplots()
-    ax.plot(np.arange(len(fracs)), fracs, linewidth=0.8)
-
-    ax.set(xlabel='batch', ylabel='fraction of falls in batch',
-        title= 'Fraction of Falls in Batches of Shuffled Dataset from Generator with shuffle buffer of size {shuffle_buffer_size}')
-    ax.grid()
-
-    fig.savefig(save_dir/f"Fall_fractions_g_{shuffle_buffer_size}.png")
-
-def count_labels(subject_set, sisfall_dataset_processed_path):
+def count_labels(subject_set, dataset_processed_path):
     count = Counter()
     for subject in subject_set:
         with np.load(sisfall_dataset_processed_path/f"{subject}.npz") as subject_data:
