@@ -6,7 +6,7 @@ import numpy as np
 import tensorflow as tf
 import keras
 from sklearn.model_selection import StratifiedKFold, train_test_split
-from dataset_utils import make_X_Y
+from dataset_utils import make_X_Y, fit_normalizer, normalize
 from datetime import datetime
 
 RUN = "25_a_0.99_G_2.4_t_0.549_wN_all_maxspec_decimate"
@@ -52,17 +52,7 @@ def adapt_normalization_layer(tinyCNN_model_instance, X_train):
     layer = tinyCNN_model_instance.get_layer(index=1)
     layer.adapt(X_train)
 
-def fit_normalizer(X_train, save_path):
 
-    mean = X_train.mean(axis=(0, 2, 3), keepdims=True, dtype=np.float64)
-    std = X_train.std(axis=(0, 2, 3), keepdims=True, dtype=np.float64)
-    std = np.maximum(std, 1e-7)
-    mean, std = mean.astype(np.float32), std.astype(np.float32)
-    np.savez(save_path, mean=mean, std=std)
-    return mean, std
-
-def normalize(X, mean, std):
-    return ((X - mean) / std)
 
 def output_bias_init(tinyCNN_model_instance):
     dense_layer = tinyCNN_model_instance.layers[-1]
