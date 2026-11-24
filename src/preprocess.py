@@ -17,12 +17,77 @@ import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 from collections import Counter
 import scipy
-
+from tqdm import tqdm
 
 SubjectAdultList = [f"SA{str(i).zfill(2)}" for i in range(1, 24)]
 SubjectElderlyList = [f"SE{str(i).zfill(2)}" for i in range(1, 16)]
 
-def preprocess(resampling_method="decimate"):
+kfall_subject_codes = [
+    "SA06", "SA07", "SA08", "SA09", "SA10", "SA11", "SA12", "SA13",
+    "SA14", "SA15", "SA16", "SA17", "SA18", "SA19", "SA20", "SA21",
+    "SA22", "SA23", "SA24", "SA25", "SA26", "SA27", "SA28", "SA29",
+    "SA30", "SA31", "SA32", "SA33", "SA35", "SA36", "SA37", "SA38",
+]
+
+def preprocess_kfall():
+
+    load_dotenv(override=True)  
+
+    kfall_dataset_loaded_path = Path(os.environ.get("KFALL_DATASET_LOADED_ROOT"))
+    kfall_dataset_processed_path = Path(os.environ.get("KFALL_DATASET_PROCESSED_ROOT"))
+        
+    kfall_dataset_processed_path.mkdir(parents=True, exist_ok=True)
+
+    for subject in tqdm(kfall_subject_codes, desc="Processing KFall subjects"):
+        
+        subject_windows = []
+        subject_labels = []
+        
+        for file in (kfall_dataset_loaded_path/subject).iterdir():
+            
+            trial_df = pd.read_csv(file)
+            
+            x = trial_df.iloc[:, 1:7].to_numpy(dtype=float)
+            y = trial_df.iloc[:, 7:8].to_numpy(dtype=int)
+
+            trial_np = np.concatenate((x, y), axis=1)
+
+            # extending the fall phase by 0.5s at 100 Hz (50 samples)
+            is_fall = 20 <= int(file.name[4:6]) <= 34
+            if is_fall:
+        
+                labels = trial_np[:, -1]
+                fall_indicies = np.where(labels == 1)
+                last_fall_index = fall_indicies[0][-1]
+                extended_fall_range_end = min(labels.shape[0], last_fall_index + 50 + 1)
+                labels[last_fall_index + 1: extended_fall_range_end] = 1
+                
+                # we now cut the remainder of the trial after the extended fall period as advised by the paper
+                # will cut after 50 more samples after the extended fall period, to allow for more windows over the fall range
+                trial_cut_range_end = min(extended_fall_range_end + 50, labels.shape[0])
+                trial_np = trial_np[:trial_cut_range_end]
+                
+                
+            # perform sliding windows of length 50 samples, and stride 10 samples
+            windows_view = sliding_window_view(trial_np, 50, axis=0)[::10]
+
+            window_labels = np.zeros(windows_view.shape[0]) # each window gets a final class label of 0 or 1 (fall)
+            
+            for i, labels in enumerate(windows_view[:,-1]):
+                
+                counter = Counter(labels)
+                if counter[1]>= 20: 
+                    window_labels[i] = 1
+            
+            subject_windows.append(windows_view[:,:-1].astype(np.float32))
+            subject_labels.append(window_labels.astype(np.int32))
+
+        subject_windows = np.concatenate((subject_windows)).reshape((-1, 6, 50 , 1)) # shape (n, 6, 50 , 1)
+        subject_labels = np.eye(2, dtype=np.int32)[np.concatenate((subject_labels))] # shape (n, 2)
+        
+        np.savez(kfall_dataset_processed_path/f"{subject}.npz", windows=subject_windows, labels=subject_labels)
+
+def preprocess_sisfall(resampling_method="decimate"):
     
     load_dotenv(override=True)  
     
@@ -31,7 +96,7 @@ def preprocess(resampling_method="decimate"):
     
     sisfall_dataset_processed_path.mkdir(parents=True, exist_ok=True)
 
-    for subject in SubjectAdultList + SubjectElderlyList:
+    for subject in tqdm(SubjectAdultList + SubjectElderlyList, desc="Processing SisFall subjects"):
     
         subject_windows = []
         subject_labels = []
@@ -91,7 +156,7 @@ def preprocess(resampling_method="decimate"):
         
         np.savez(sisfall_dataset_processed_path/f"{subject}.npz", windows=subject_windows, labels=subject_labels)
 
-
-
 if __name__ == "__main__":
-    preprocess(resampling_method="decimate")
+
+    # preprocess_kfall()
+    preprocess_sisfall(resampling_method="decimate")
