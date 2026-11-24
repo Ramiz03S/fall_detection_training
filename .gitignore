@@ -8,3 +8,5 @@ runs
 optuna_runs
 plots
 export
+esp32_export
+*.log
