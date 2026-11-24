@@ -6,13 +6,11 @@ from pathlib import Path
 from dotenv import load_dotenv
 import os
 from ai_edge_litert.interpreter import Interpreter
-from dataset_utils import make_X_Y
+from dataset_utils import make_X_Y, normalize
 from sklearn.metrics import confusion_matrix
 import pandas as pd
 
 
-def normalize(X, mean, std):
-    return ((X - mean) / std)
 
 def calib_labels(Y_train):
     global calib
@@ -34,6 +32,7 @@ def quantize_model(best_model_path, export_path):
 
     converter = tf.lite.TFLiteConverter.from_saved_model(str(export_path/"best_model"))
     f32_bytes = converter.convert()
+    print("\nf32 model analysis:")
     tf.lite.experimental.Analyzer.analyze(model_content=f32_bytes)
     # model without quantization, just converted into tflite format
     (export_path/"tflite_format").mkdir(parents=True, exist_ok=True)
@@ -46,7 +45,8 @@ def quantize_model(best_model_path, export_path):
     converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8] 
     converter.inference_input_type = tf.int8                                    
     converter.inference_output_type = tf.int8                                   
-    tflite_int8 = converter.convert()               
+    tflite_int8 = converter.convert()    
+    print("\nint8 model analysis:")           
     tf.lite.experimental.Analyzer.analyze(model_content=tflite_int8)
     open(export_path/"tflite_format"/"int8.tflite", "wb").write(tflite_int8)
 
@@ -107,8 +107,8 @@ def main():
     X_val, Y_val = make_X_Y(val_set, sisfall_dataset_processed_path)
 
     norm_stats = np.load(norm_stats_path)
-    mean = norm_stats['mean'] # (1, 6, 1, 1)
-    std = norm_stats['std'] # (1, 6, 1, 1)
+    mean = norm_stats['mean'] 
+    std = norm_stats['std'] 
 
     X_train = normalize(X_train, mean, std)
     Y_train = Y_train.argmax(1)
@@ -116,7 +116,6 @@ def main():
     Y_val = Y_val.argmax(1)
 
     calib_labels(Y_train)
-
     # print(X_train[calib].min(), X_train[calib].max())      
     # print(X_train.min(), X_train.max())      
 
@@ -145,9 +144,10 @@ def main():
     rows = []
     for dataset, result in results.items():
         for mode in ["keras", "f32", "int8"]:
-            rows.append({"set": dataset, "model": mode, **report(result["y"], result[mode])})
+            rows.append({"set": dataset, "model": mode, **report(result["y"], result[mode], thr = 0.549)})
     table = pd.DataFrame(rows)
     print(table.round(4).to_string(index=False))
+
 
 if __name__ == "__main__":
     main()
