@@ -3,26 +3,26 @@ from pathlib import Path
 from dotenv import load_dotenv
 import numpy as np
 from collections import Counter
-from sklearn.model_selection import StratifiedKFold, train_test_split
+from sklearn.model_selection import KFold, StratifiedKFold, train_test_split
 import matplotlib.pyplot as plt
 import random
 import sys
 
 CH_NAMES = ["acc_x", "acc_y", "acc_z", "gyr_x", "gyr_y", "gyr_z"]
 
-subject_adult_list = [f"SA{str(i).zfill(2)}" for i in range(1, 24)]
-subject_elderly_list = [f"SE{str(i).zfill(2)}" for i in range(1, 16)]
+sisfall_subject_adult_list = [f"SA{str(i).zfill(2)}" for i in range(1, 24)]
+sisfall_subject_elderly_list = [f"SE{str(i).zfill(2)}" for i in range(1, 16)]
 
-kfall_subject_codes = [
+sisfall_subject_list = sisfall_subject_adult_list + sisfall_subject_elderly_list
+# 0 subjects are complete with falls and adl, 1 subjects just have adls
+sisfall_subject_type_list = [0 for _ in range(1,24)] + [1 for _ in range(1,6)] + [0] + [1 for _ in range(7,16)]
+
+kfall_subject_list = [
     "SA06", "SA07", "SA08", "SA09", "SA10", "SA11", "SA12", "SA13",
     "SA14", "SA15", "SA16", "SA17", "SA18", "SA19", "SA20", "SA21",
     "SA22", "SA23", "SA24", "SA25", "SA26", "SA27", "SA28", "SA29",
     "SA30", "SA31", "SA32", "SA33", "SA35", "SA36", "SA37", "SA38",
 ]
-
-sisfall_subject_list = subject_adult_list + subject_elderly_list
-# 0 subjects are complete with falls and adl, 1 subjects just have adls
-subject_type = [0 for _ in range(1,24)] + [1 for _ in range(1,6)] + [0] + [1 for _ in range(7,16)]
 
 # output_signature_window = tf.TensorSpec(shape=(6,50,1), dtype=tf.float32)
 # output_signature_label = tf.TensorSpec(shape=(2,), dtype=tf.int32)
@@ -147,10 +147,11 @@ def count_labels_stratified_kfold(n_splits, subject_list, random_state, dataset_
         
         print(f"fold {fold} train set has: {train_count[0]} ADLs, {train_count[1]} falls, {(train_count[1]/train_count[0]):.2f} fall to ADL ratio")
         print(f"fold {fold} val set has: {val_count[0]} ADLs, {val_count[1]} falls, {(val_count[1]/val_count[0]):.2f} fall to ADL ratio")
+
 # only on sisfall dataset
 def count_labels_stratified_kfolds_wTestset(test_size, subject_list, n_splits, random_state, dataset_processed_path):
     
-    subject_train, subject_test, subject_train_type, subject_test_type = train_test_split(subject_list, subject_type, test_size=test_size, random_state=random_state, shuffle=True, stratify=subject_type)
+    subject_train, subject_test, subject_train_type, subject_test_type = train_test_split(subject_list, sisfall_subject_type_list, test_size=test_size, random_state=random_state, shuffle=True, stratify=sisfall_subject_type_list)
     
     skf = StratifiedKFold(n_splits=n_splits, random_state=random_state, shuffle=True)
     
@@ -165,9 +166,28 @@ def count_labels_stratified_kfolds_wTestset(test_size, subject_list, n_splits, r
         
         print(f"fold {fold} train set has: {train_count[0]} ADLs, {train_count[1]} falls, {(train_count[1]/train_count[0]):.3f} fall to ADL ratio")
         print(f"fold {fold} val set has: {val_count[0]} ADLs, {val_count[1]} falls, {(val_count[1]/val_count[0]):.3f} fall to ADL ratio")
-        print(f"test set has: {test_count[0]} ADLs, {test_count[1]} falls, {(test_count[1]/test_count[0]):.3f} fall to ADL ratio")
+    print(f"test set has: {test_count[0]} ADLs, {test_count[1]} falls, {(test_count[1]/test_count[0]):.3f} fall to ADL ratio")
         
+# only on kfall dataset
+def count_labels_kfolds_wTestset(test_size, subject_list, n_splits, random_state, dataset_processed_path):
+    
+    subject_train, subject_test = train_test_split(subject_list, test_size=test_size, random_state=random_state, shuffle=True)
+    
+    kf = KFold(n_splits=n_splits, random_state=random_state, shuffle=True)
+    
+    for fold, (train_index, val_index) in enumerate(kf.split(subject_train)):
         
+        train_set = [subject_train[i] for i in train_index]
+        val_set = [subject_train[i] for i in val_index]
+        
+        train_count = count_labels(train_set, dataset_processed_path)
+        val_count = count_labels(val_set, dataset_processed_path)
+        test_count = count_labels(subject_test, dataset_processed_path)
+        
+        print(f"fold {fold} train set has: {train_count[0]} ADLs, {train_count[1]} falls, {(train_count[1]/train_count[0]):.3f} fall to ADL ratio")
+        print(f"fold {fold} val set has: {val_count[0]} ADLs, {val_count[1]} falls, {(val_count[1]/val_count[0]):.3f} fall to ADL ratio")
+    print(f"test set has: {test_count[0]} ADLs, {test_count[1]} falls, {(test_count[1]/test_count[0]):.3f} fall to ADL ratio")
+       
 
 def count_labels_per_subject(subject_set, dataset_processed_path):
     adl_array = []
@@ -193,8 +213,12 @@ def plot_subject_labels(subject_set, dataset_processed_path, save_dir, filename 
         p = ax.bar(subject_set, label_count, width, label=boolean, bottom=bottom)
         bottom += label_count
 
+    fall_percentages = 100 * np.asarray(label_count) / bottom
+    ax.bar_label(p, labels=[f"{percent:.1f}%" for percent in fall_percentages])
+
     ax.legend(loc="upper right")
     ax.grid()
+    ax.set_axisbelow(True)
     fig.set_size_inches(18.5, 10.5)
     fig.savefig(save_dir/f"{filename}_subjects_label_distribution.png", dpi=300)
 
@@ -272,14 +296,14 @@ if __name__ == "__main__":
     plot_save_path = Path(os.environ.get("PLOT_SAVE_ROOT"))
     plot_save_path.mkdir(parents=True, exist_ok=True)
 
-    X_kfall, Y_kfall = make_X_Y(kfall_subject_codes, kfall_dataset_processed_path)
+    X_kfall, Y_kfall = make_X_Y(kfall_subject_list, kfall_dataset_processed_path)
     X_sisfall, Y_sisfall = make_X_Y(sisfall_subject_list, sisfall_dataset_processed_path)
     
     plot_frac_from_Y(Y_sisfall, 512, 0, plot_save_path, filename='sisfall_all_subjects')
     plot_frac_from_Y(Y_kfall, 512, 0, plot_save_path, filename='kfall_all_subjects')
 
     count_sisfall = count_labels(sisfall_subject_list, sisfall_dataset_processed_path)
-    count_kfall = count_labels(kfall_subject_codes, kfall_dataset_processed_path)
+    count_kfall = count_labels(kfall_subject_list, kfall_dataset_processed_path)
     print(f"Ratio of falls to ADLs across all subjects in sisfall dataset: {np.round(count_sisfall[1] / count_sisfall[0], 3)}")
     print(f"Ratio of falls to ADLs across all subjects in kfall dataset: {np.round(count_kfall[1] / count_kfall[0], 3)}")
 
@@ -294,9 +318,13 @@ if __name__ == "__main__":
     for i, ch in enumerate(CH_NAMES):
         print(f"{ch} : {mean_kfall.flatten()[i]:.3f} ± {std_kfall.flatten()[i]:.3f}")
 
-    plot_subject_labels(kfall_subject_codes, kfall_dataset_processed_path, plot_save_path, filename='kfall_all_subjects_label_distribution')
+    plot_subject_labels(kfall_subject_list, kfall_dataset_processed_path, plot_save_path, filename='kfall_all_subjects_label_distribution')
     plot_subject_labels(sisfall_subject_list, sisfall_dataset_processed_path, plot_save_path, filename='sisfall_all_subjects_label_distribution')
+
     
+    count_labels_stratified_kfolds_wTestset(test_size=0.15, subject_list=sisfall_subject_list, n_splits=5, random_state=1, dataset_processed_path=sisfall_dataset_processed_path)
+    count_labels_kfolds_wTestset(test_size=0.15, subject_list=kfall_subject_list, n_splits=5, random_state=1, dataset_processed_path=kfall_dataset_processed_path)
+
     sys.stdout = old_stdout
     log_file.close()
    
