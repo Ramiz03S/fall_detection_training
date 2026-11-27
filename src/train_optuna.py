@@ -8,31 +8,46 @@ import tensorflow as tf
 import keras
 import pandas as pd
 from sklearn.metrics import roc_curve
-from sklearn.model_selection import StratifiedKFold, train_test_split
-from dataset_utils import make_X_Y
+from sklearn.model_selection import StratifiedKFold, KFold, train_test_split
+from dataset_utils import make_X_Y, fit_normalizer, normalize
 from datetime import datetime
 import optuna
 
-STUDY_NAME = "study_4"
+STUDY_NAME = "study_3_kfall"
+DATASET_USED = "kfall" # or "sisfall"
 RAND_STATE = 5
-SEARCH_SPACE = {"alpha":[0.9, 0.95, 0.99], "gamma":[2.1, 2.2, 2.3, 2.4]}
+SEARCH_SPACE = {"alpha":[0.5, 0.8, 0.85, 0.9], "gamma":[0, 2, 3, 4]}
 
 
-subject_adult_list = [f"SA{str(i).zfill(2)}" for i in range(1, 24)]
-subject_elderly_list = [f"SE{str(i).zfill(2)}" for i in range(1, 16)]
+sisfall_subject_adult_list = [f"SA{str(i).zfill(2)}" for i in range(1, 24)]
+sisfall_subject_elderly_list = [f"SE{str(i).zfill(2)}" for i in range(1, 16)]
 
-subject_list = subject_adult_list + subject_elderly_list
-subject_type_list = [0 for _ in range(1,24)] + [1 for _ in range(1,6)] + [0] + [1 for _ in range(7,16)]
+sisfall_subject_list = sisfall_subject_adult_list + sisfall_subject_elderly_list
+# 0 subjects are complete with falls and adl, 1 subjects just have adls
+sisfall_subject_type_list = [0 for _ in range(1,24)] + [1 for _ in range(1,6)] + [0] + [1 for _ in range(7,16)]
+
+kfall_subject_list = [
+    "SA06", "SA07", "SA08", "SA09", "SA10", "SA11", "SA12", "SA13",
+    "SA14", "SA15", "SA16", "SA17", "SA18", "SA19", "SA20", "SA21",
+    "SA22", "SA23", "SA24", "SA25", "SA26", "SA27", "SA28", "SA29",
+    "SA30", "SA31", "SA32", "SA33", "SA35", "SA36", "SA37", "SA38",
+]
+
+if DATASET_USED == "sisfall":
+    SUBJECTS = sisfall_subject_list
+elif DATASET_USED == "kfall":
+    SUBJECTS = kfall_subject_list
+else:
+    raise ValueError(f"Unknown DATASET_USED: {DATASET_USED}")
 
 EPOCHS = 200
 BATCH_SIZE = 512
-RATE_FALLS = 0.03
+RATE_FALLS = 0.10
 LEARNING_RATE = 0.0005
 N_SPLITS = 5
 DATETIME = str(datetime.now().replace(microsecond=0))
 TEST_SIZE = 0.15
 FOLDS_RAN = 5
-SUBJECTS = subject_list
 PATIENCE = 20
 DELTA = 0.001
 START_FROM_EPOCH = 20
@@ -55,18 +70,6 @@ def make_TinyCNN():
 def adapt_normalization_layer(tinyCNN_model_instance, X_train):
     layer = tinyCNN_model_instance.get_layer(index=1)
     layer.adapt(X_train)
-
-def fit_normalizer(X_train, save_path):
-
-    mean = X_train.mean(axis=(0, 2, 3), keepdims=True, dtype=np.float64)
-    std = X_train.std(axis=(0, 2, 3), keepdims=True, dtype=np.float64)
-    std = np.maximum(std, 1e-7)
-    mean, std = mean.astype(np.float32), std.astype(np.float32)
-    np.savez(save_path, mean=mean, std=std)
-    return mean, std
-
-def normalize(X, mean, std):
-    return ((X - mean) / std)
 
 def output_bias_init(tinyCNN_model_instance, rate_falls):
     dense_layer = tinyCNN_model_instance.layers[-1]
@@ -126,17 +129,30 @@ def train(trial : optuna.Trial):
     print("number of gpu devices: ", len(devices)) 
     print("printing tf.test.is_built_with_cuda(): ", tf.test.is_built_with_cuda())
     
-    load_dotenv()  
-    sisfall_dataset_processed_path = Path(os.environ.get("SISFALL_DATASET_PROCESSED_ROOT"))
-    optuna_runs_path = Path(os.environ.get("OPTUNA_RUNS_ROOT"))
+    load_dotenv(override=True)
+
+    if DATASET_USED == "sisfall":
+        dataset_processed_path = Path(os.environ.get("SISFALL_DATASET_PROCESSED_ROOT"))
+    elif DATASET_USED == "kfall":
+        dataset_processed_path = Path(os.environ.get("KFALL_DATASET_PROCESSED_ROOT"))
+
+    print("Data path:", dataset_processed_path.resolve())
+    optuna_runs_path = Path(os.environ.get("OPTUNA_RUNS_ROOT"))/DATASET_USED
    
     (optuna_runs_path/f'study_{STUDY_NAME}'/f'run_{RUN}'/'models').mkdir(parents=True, exist_ok=True)
     (optuna_runs_path/f'study_{STUDY_NAME}'/f'run_{RUN}'/'metrics').mkdir(parents=True, exist_ok=True)
     (optuna_runs_path/f'study_{STUDY_NAME}'/f'run_{RUN}'/'tensorboard').mkdir(parents=True, exist_ok=True)
     
-    train_val_set, test_set, train_val_type, test_set_type = train_test_split(subject_list, subject_type_list, test_size=TEST_SIZE, random_state=RAND_STATE, shuffle=True, stratify=subject_type_list)
+    if DATASET_USED == "sisfall":
+        train_val_set, test_set, train_val_type, test_set_type = train_test_split(sisfall_subject_list, sisfall_subject_type_list, test_size=TEST_SIZE, random_state=RAND_STATE, shuffle=True, stratify=sisfall_subject_type_list)
+        skf = StratifiedKFold(n_splits=N_SPLITS, random_state=RAND_STATE, shuffle=True)
+        train_val_gen = skf.split(train_val_set, train_val_type)
+    elif DATASET_USED == "kfall":
+        train_val_set, test_set = train_test_split(kfall_subject_list, test_size=TEST_SIZE, random_state=RAND_STATE, shuffle=True)
+        kf = KFold(n_splits=N_SPLITS, random_state=RAND_STATE, shuffle=True)
+        train_val_gen = kf.split(train_val_set)
     
-    # X_test, Y_test = make_X_Y(test_set, sisfall_dataset_processed_path)
+    # X_test, Y_test = make_X_Y(test_set, dataset_processed_path)
     
     hparams = {
         "date_time": DATETIME,
@@ -152,7 +168,8 @@ def train(trial : optuna.Trial):
         "delta" : DELTA,
         "start_from_epoch" :START_FROM_EPOCH,
         "run_description": RUN_DESCRIPTION,
-        "dataset_used": SUBJECTS
+        "subjects_used": SUBJECTS,
+        "dataset used" : DATASET_USED
     }
     
     with open(optuna_runs_path/f'study_{STUDY_NAME}'/f'run_{RUN}'/f'test_params.json', "w") as f:
@@ -161,8 +178,7 @@ def train(trial : optuna.Trial):
     folds_fall_probs = []
     folds_labels = []
     
-    skf = StratifiedKFold(n_splits=N_SPLITS, random_state=RAND_STATE, shuffle=True)
-    for fold, (train_index, val_index) in enumerate(skf.split(train_val_set, train_val_type)):
+    for fold, (train_index, val_index) in enumerate(train_val_gen):
         
         keras.backend.clear_session()
         keras.utils.set_random_seed(RAND_STATE)
@@ -173,8 +189,9 @@ def train(trial : optuna.Trial):
         train_set = [train_val_set[i] for i in train_index]
         val_set = [train_val_set[i] for i in val_index]
         
-        X_train, Y_train = make_X_Y(train_set, sisfall_dataset_processed_path)
-        X_val, Y_val = make_X_Y(val_set, sisfall_dataset_processed_path)
+        X_train, Y_train = make_X_Y(train_set, dataset_processed_path)
+        X_val, Y_val = make_X_Y(val_set, dataset_processed_path)
+        assert np.isfinite(X_train).all() and np.isfinite(X_val).all(), "Dataset contains NaN or Inf"
         
         csv_logger = keras.callbacks.CSVLogger(optuna_runs_path/f'study_{STUDY_NAME}'/f'run_{RUN}'/'metrics'/f'fold_{fold}.log', 
                                                separator=',',
@@ -204,7 +221,8 @@ def train(trial : optuna.Trial):
             y=Y_train,
             shuffle=True, batch_size=BATCH_SIZE, epochs=EPOCHS,
             validation_data=(normalize(X_val, mean, std), Y_val),
-            callbacks=[csv_logger, checkpoint, tensorboard, earlystopping])
+            callbacks=[csv_logger, checkpoint, tensorboard, earlystopping],
+            verbose=2)
         
         
         best_model = keras.models.load_model(optuna_runs_path/f'study_{STUDY_NAME}'/f'run_{RUN}'/'models'/f'fold_{fold}.keras',
@@ -228,15 +246,24 @@ def train(trial : optuna.Trial):
     return float(results["specificity"])
 
 def optuna_init(study_name):
-    load_dotenv()  
+    load_dotenv(override=True)  
     optuna_runs_path = Path(os.environ.get("OPTUNA_RUNS_ROOT"))
     (optuna_runs_path).mkdir(parents=True, exist_ok=True)
     
     sampler = optuna.samplers.GridSampler(search_space=SEARCH_SPACE, seed=RAND_STATE)
-    return optuna.create_study(direction="maximize", sampler=sampler, storage=f"sqlite:///{str(optuna_runs_path/"tuning.db")}", study_name=study_name, load_if_exists=True)       
+    study = optuna.create_study(direction="maximize", sampler=sampler, storage=f"sqlite:///{str(optuna_runs_path/'tuning.db')}", study_name=study_name, load_if_exists=True)
+
+    # guard against appending trials from one dataset to a study made on another
+    study_dataset = study.user_attrs.get("dataset")
+    if study_dataset is None:
+        study.set_user_attr("dataset", DATASET_USED)
+    elif study_dataset != DATASET_USED:
+        raise ValueError(f"Study '{study_name}' was created for '{study_dataset}', but DATASET_USED is '{DATASET_USED}'. Use a different STUDY_NAME.")
+
+    return study       
 
 if __name__ == "__main__":
     
     study = optuna_init(STUDY_NAME)
     
-    study.optimize(train, n_trials=12)
+    study.optimize(train, n_trials=16)
